@@ -1,0 +1,36 @@
+{
+    "level1": {
+        "name": "Circuit Board Alpha",
+        "description": "The first level - navigate the motherboard and squash the bugs!",
+        "width": 50,
+        "height": 37,
+        "spawn": { "x": 3, "y": 32 },
+        "bugs": [
+            { "x": 8, "y": 34, "facing": "right" },
+            { "x": 22, "y": 34, "facing": "left" },
+            { "x": 20, "y": 27, "facing": "right" },
+            { "x": 34, "y": 23, "facing": "left" },
+            { "x": 44, "y": 17, "facing": "right" }
+        ],
+        "tiles": {
+            "ground_y": 35,
+            "platforms": [
+                { "x1": 5, "x2": 12, "y": 30, "type": "chip" },
+                { "x1": 18, "x2": 26, "y": 28, "type": "solid" },
+                { "x1": 30, "x2": 38, "y": 24, "type": "solid" },
+                { "x1": 8, "x2": 15, "y": 20, "type": "capacitor" },
+                { "x1": 40, "x2": 48, "y": 18, "type": "chip" }
+            ],
+            "gaps": [
+                { "x1": 15, "x2": 18 },
+                { "x1": 28, "x2": 32 },
+                { "x1": 42, "x2": 45 }
+            ]
+        }
+    },
+    "metadata": {
+        "tile_size": 16,
+        "player_size": { "width": 14, "height": 16 },
+        "bug_size": { "width": 16, "height": 16 }
+    }
+}

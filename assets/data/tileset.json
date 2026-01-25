@@ -1,0 +1,68 @@
+{
+  "tiles": [
+    {
+      "id": 1,
+      "name": "grass",
+      "type": "terrain",
+      "properties": {
+        "walkable": true,
+        "collidable": false
+      },
+      "texture": "assets/textures/grass.png"
+    },
+    {
+      "id": 2,
+      "name": "water",
+      "type": "terrain",
+      "properties": {
+        "walkable": false,
+        "collidable": false
+      },
+      "texture": "assets/textures/water.png"
+    },
+    {
+      "id": 3,
+      "name": "sand",
+      "type": "terrain",
+      "properties": {
+        "walkable": true,
+        "collidable": false
+      },
+      "texture": "assets/textures/sand.png"
+    },
+    {
+      "id": 4,
+      "name": "stone",
+      "type": "obstacle",
+      "properties": {
+        "walkable": false,
+        "collidable": true
+      },
+      "texture": "assets/textures/stone.png"
+    },
+    {
+      "id": 5,
+      "name": "tree",
+      "type": "obstacle",
+      "properties": {
+        "walkable": false,
+        "collidable": true
+      },
+      "texture": "assets/textures/tree.png"
+    }
+  ],
+  "tileSize": {
+    "width": 16,
+    "height": 16
+  },
+  "player": {
+    "height": 16,
+    "respawn": {
+      "enabled": true,
+      "location": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  }
+}

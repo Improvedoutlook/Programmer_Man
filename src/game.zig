@@ -172,7 +172,7 @@ pub const Game = struct {
 
                 // Check for Enter/Return key (both main keyboard and numpad)
                 const enter_pressed = rl.isKeyPressed(.enter) or rl.isKeyPressed(.kp_enter) or rl.isKeyPressed(.e);
-                
+
                 if (overlaps and enter_pressed) {
                     self.state = .victory;
                 }

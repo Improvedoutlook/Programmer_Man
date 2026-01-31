@@ -5,6 +5,15 @@ Write-Host "==================================" -ForegroundColor Cyan
 Write-Host "  Programmer_Man - 2D Platformer" -ForegroundColor Cyan
 Write-Host "==================================" -ForegroundColor Cyan
 Write-Host ""
+
+# Kill any existing game process to prevent AccessDenied errors during build
+$existingProcess = Get-Process -Name "programmer_man" -ErrorAction SilentlyContinue
+if ($existingProcess) {
+    Write-Host "Stopping existing game process..." -ForegroundColor Yellow
+    Stop-Process -Name "programmer_man" -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+}
+
 Write-Host "Building game..." -ForegroundColor Yellow
 
 # Clean and build

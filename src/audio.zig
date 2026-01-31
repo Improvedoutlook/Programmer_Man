@@ -41,6 +41,7 @@ pub const ChiptunePlayer = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        self.stop(); // Use your existing stop method
         rl.unloadSound(self.sound);
         rl.unloadWave(self.wave);
     }

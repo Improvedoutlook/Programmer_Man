@@ -46,8 +46,9 @@ pub const LEVEL_WIDTH: i32 = TILES_X;
 pub const LEVEL_HEIGHT: i32 = TILES_Y;
 
 // Spawn point (in tile coordinates)
-pub const SPAWN_TILE_X: i32 = 3;
-pub const SPAWN_TILE_Y: i32 = 31; // Was 32, now 31 (one tile higher)
+// Player spawns with feet on top of the ground at tile y=35
+pub const SPAWN_TILE_X = 3;
+pub const SPAWN_TILE_Y = 35; // Ground level tile - player will be placed on top of this
 
 // Audio settings
 pub const MUSIC_VOLUME: f32 = 0.5;

@@ -37,10 +37,12 @@ pub fn main() !void {
         rl.clearBackground(config.BACKGROUND_COLOR);
         game.render();
     }
+
+    // Ensure clean exit - explicitly flush any pending operations
+    std.debug.print("Game window closed, shutting down...\n", .{});
 }
 
 test "basic game initialization" {
     const game = Game.init();
     _ = game;
 }
-

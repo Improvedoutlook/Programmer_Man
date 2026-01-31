@@ -181,8 +181,14 @@ pub fn createLevel1(tilemap: *Tilemap) void {
     // Platform 1 - Low left (chip style)
     fillHorizontal(tilemap, 5, 12, 30, .chip);
 
-    // Platform 2 - Middle floating
+    // Platform 2 - Middle floating (the one you're stuck on)
     fillHorizontal(tilemap, 18, 26, 28, .solid);
+
+    // NEW: Bridge from Platform 2 to left side
+    fillHorizontal(tilemap, 14, 18, 26, .solid); // Connects to Platform 1 area
+
+    // NEW: Step up from Platform 2 to Platform 3
+    fillHorizontal(tilemap, 26, 30, 26, .solid); // Right of Platform 2
 
     // Platform 3 - High right
     fillHorizontal(tilemap, 30, 38, 24, .solid);
@@ -190,10 +196,16 @@ pub fn createLevel1(tilemap: *Tilemap) void {
     // Platform 4 - Very high left
     fillHorizontal(tilemap, 8, 15, 20, .capacitor);
 
+    // NEW: Connect Platform 4 to lower platforms
+    fillHorizontal(tilemap, 6, 9, 23, .solid); // Step down from Platform 4
+
     // Platform 5 - Top right corner
     fillHorizontal(tilemap, 40, 48, 18, .chip);
 
-    // Small stepping stones
+    // NEW: Connect Platform 5 to Platform 3
+    fillHorizontal(tilemap, 38, 41, 21, .solid); // Bridge between 3 and 5
+
+    // Small stepping stones (keep existing)
     tilemap.setTile(14, 26, .solid);
     tilemap.setTile(15, 26, .solid);
     tilemap.setTile(27, 22, .solid);

@@ -223,7 +223,7 @@ pub const BugManager = struct {
                     player.bounce();
                 } else {
                     // Player takes damage
-                    player.die();
+                    player.takeDamage();
                 }
             }
         }

@@ -23,6 +23,8 @@ pub const Game = struct {
     state: GameState,
     current_level: u8,
     music: ?audio.ChiptunePlayer,
+    all_bugs_defeated: bool,
+    terminal_pos: ?struct { x: i32, y: i32 },
 
     const Self = @This();
 
@@ -44,6 +46,8 @@ pub const Game = struct {
             .state = .playing,
             .current_level = 0,
             .music = music_player,
+            .all_bugs_defeated = false,
+            .terminal_pos = null,
         };
     }
 
@@ -63,15 +67,21 @@ pub const Game = struct {
         // Reset bugs
         self.bugs.reset();
 
+        // Reset terminal state
+        self.all_bugs_defeated = false;
+
         // Load level data
         switch (level) {
             0 => {
                 tilemap_builder.createLevel1(&self.tilemap);
                 self.spawnBugsLevel1();
+                // Terminal on far-left platform (tile y=30, terminal is 2 tiles tall, so start at y=28 to sit on top)
+                self.terminal_pos = .{ .x = 6, .y = 28 };
             },
             else => {
                 tilemap_builder.createLevel1(&self.tilemap);
                 self.spawnBugsLevel1();
+                self.terminal_pos = .{ .x = 6, .y = 28 };
             },
         }
 
@@ -134,9 +144,39 @@ pub const Game = struct {
             self.state = .game_over;
         }
 
-        // Check for victory (all bugs defeated)
-        if (self.bugs.getActiveCount() == 0) {
-            self.state = .victory;
+        // Check if all bugs defeated (but don't trigger victory yet)
+        if (self.bugs.getActiveCount() == 0 and !self.all_bugs_defeated) {
+            self.all_bugs_defeated = true;
+        }
+
+        // Check for terminal interaction to submit PR and win
+        if (self.all_bugs_defeated) {
+            if (self.terminal_pos) |term| {
+                // Terminal bounding box (2 tiles wide, extended height for easier interaction)
+                const term_x = @as(f32, @floatFromInt(term.x * config.TILE_SIZE));
+                const term_y = @as(f32, @floatFromInt(term.y * config.TILE_SIZE));
+                const term_w: f32 = 32.0;
+                const term_h: f32 = 48.0; // Extended to reach down to platform level
+
+                // Player bounding box
+                const px = self.player.x;
+                const py = self.player.y;
+                const pw = config.PLAYER_WIDTH;
+                const ph = config.PLAYER_HEIGHT;
+
+                // AABB overlap check
+                const overlaps = px < term_x + term_w and
+                    px + pw > term_x and
+                    py < term_y + term_h and
+                    py + ph > term_y;
+
+                // Check for Enter/Return key (both main keyboard and numpad)
+                const enter_pressed = rl.isKeyPressed(.enter) or rl.isKeyPressed(.kp_enter) or rl.isKeyPressed(.e);
+                
+                if (overlaps and enter_pressed) {
+                    self.state = .victory;
+                }
+            }
         }
     }
 
@@ -165,6 +205,9 @@ pub const Game = struct {
         // Render tilemap
         self.tilemap.render();
 
+        // Render terminal
+        self.renderTerminal();
+
         // Render enemies
         self.bugs.render();
 
@@ -173,6 +216,11 @@ pub const Game = struct {
 
         // Render HUD
         self.player.renderHUD();
+
+        // Render terminal hint if all bugs defeated
+        if (self.all_bugs_defeated and self.state == .playing) {
+            self.renderTerminalHint();
+        }
 
         // Render state-specific overlays
         switch (self.state) {
@@ -206,13 +254,59 @@ pub const Game = struct {
         // Victory text
         var green = rl.Color.green;
         green.a = 255;
-        rl.drawText("LEVEL COMPLETE!", config.SCREEN_WIDTH / 2 - 150, config.SCREEN_HEIGHT / 2 - 50, 40, green);
+        rl.drawText("You win!", config.SCREEN_WIDTH / 2 - 80, config.SCREEN_HEIGHT / 2 - 60, 40, green);
+        rl.drawText("Pull request successfully submitted!", config.SCREEN_WIDTH / 2 - 180, config.SCREEN_HEIGHT / 2 - 15, 24, green);
 
         // Score display
         var score_buf: [64]u8 = undefined;
         const score_text = std.fmt.bufPrintZ(&score_buf, "Final Score: {d}", .{self.player.score}) catch "Final Score: ???";
-        rl.drawText(score_text, config.SCREEN_WIDTH / 2 - 80, config.SCREEN_HEIGHT / 2, 24, config.HUD_COLOR);
+        rl.drawText(score_text, config.SCREEN_WIDTH / 2 - 80, config.SCREEN_HEIGHT / 2 + 25, 24, config.HUD_COLOR);
 
-        rl.drawText("Press R to Restart", config.SCREEN_WIDTH / 2 - 90, config.SCREEN_HEIGHT / 2 + 40, 20, config.HUD_COLOR);
+        rl.drawText("Press R to Restart", config.SCREEN_WIDTH / 2 - 90, config.SCREEN_HEIGHT / 2 + 65, 20, config.HUD_COLOR);
+    }
+
+    fn renderTerminal(self: *Self) void {
+        if (self.terminal_pos) |term| {
+            const px = term.x * config.TILE_SIZE;
+            const py = term.y * config.TILE_SIZE;
+
+            // Terminal body (2x2 tiles)
+            const body_color = rl.Color{ .r = 30, .g = 30, .b = 35, .a = 255 };
+            rl.drawRectangle(px, py, 32, 32, body_color);
+
+            // Screen area
+            const screen_color = if (self.all_bugs_defeated)
+                rl.Color{ .r = 0, .g = 200, .b = 100, .a = 255 } // Green when active
+            else
+                rl.Color{ .r = 50, .g = 50, .b = 60, .a = 255 }; // Dim when inactive
+            rl.drawRectangle(px + 3, py + 3, 26, 18, screen_color);
+
+            // Terminal text/cursor
+            if (self.all_bugs_defeated) {
+                rl.drawText(">", px + 5, py + 5, 12, rl.Color.black);
+            }
+
+            // Stand/base
+            rl.drawRectangle(px + 10, py + 24, 12, 6, rl.Color{ .r = 50, .g = 50, .b = 55, .a = 255 });
+
+            // Border highlight
+            rl.drawRectangleLines(px, py, 32, 32, rl.Color{ .r = 80, .g = 80, .b = 90, .a = 255 });
+        }
+    }
+
+    fn renderTerminalHint(_: *Self) void {
+        // Draw hint at top center of screen
+        const hint = "Bugs defeated! Go to terminal and press Enter";
+        const hint_width = 360;
+        const hint_x = config.SCREEN_WIDTH / 2 - hint_width / 2;
+        const hint_y = 60;
+
+        // Background box
+        var bg_color = rl.Color.black;
+        bg_color.a = 180;
+        rl.drawRectangle(hint_x - 10, hint_y - 5, hint_width + 20, 30, bg_color);
+
+        // Hint text
+        rl.drawText(hint, hint_x, hint_y, 18, config.HUD_COLOR);
     }
 };

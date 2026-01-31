@@ -5,6 +5,7 @@ const rl = @import("raylib");
 const config = @import("config.zig");
 const Tilemap = @import("tilemap.zig").Tilemap;
 const Player = @import("player.zig").Player;
+const audio = @import("audio.zig");
 
 pub const BugState = enum {
     walking,
@@ -100,6 +101,8 @@ pub const Bug = struct {
         self.state = .dying;
         self.death_timer = 0;
         self.vx = 0;
+        // Play stomp sound effect (bug squish)
+        audio.playSfx(.Stomp, config.SFX_VOLUME);
     }
 
     pub fn getRect(self: *const Self) rl.Rectangle {
@@ -218,6 +221,8 @@ pub const BugManager = struct {
 
                 if (is_stomping) {
                     // Stomp the bug!
+                    // Play pounce sound (impact before bounce)
+                    audio.playSfx(.Pounce, config.SFX_VOLUME * 0.8);
                     bug.stomp();
                     player.addScore(config.POINTS_PER_STOMP);
                     player.bounce();

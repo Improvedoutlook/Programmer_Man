@@ -1,0 +1,67 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "zig build",
+            "type": "shell",
+            "command": "zig",
+            "args": [
+                "build"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Kill Game Process",
+            "type": "shell",
+            "command": "Stop-Process -Name 'programmer_man' -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean Build Output",
+            "type": "shell",
+            "command": "Remove-Item -Path 'zig-out\\bin\\programmer_man.exe' -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 300",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build and Run (Safe)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Kill Game Process",
+                "Clean Build Output",
+                "zig build"
+            ],
+            "type": "shell",
+            "command": "zig",
+            "args": [
+                "build",
+                "run"
+            ],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}

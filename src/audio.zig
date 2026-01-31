@@ -1,9 +1,73 @@
 //! Procedural NES-style chiptune music generator
 //! Creates music similar to Mega Man style themes
+//! Also provides simple SFX API for game sounds
 
 const std = @import("std");
 const rl = @import("raylib");
 const config = @import("config.zig");
+
+// ============================================================================
+// SFX System - Simple sound effects API
+// ============================================================================
+
+pub const SfxType = enum {
+    Jump,
+    Pounce,
+    Stomp,
+};
+
+const SFX_COUNT = 3; // Number of SfxType variants
+
+var sfx_sounds: [SFX_COUNT]rl.Sound = undefined;
+var sfx_loaded: bool = false;
+
+const sfx_paths = [SFX_COUNT][:0]const u8{
+    "assets/audio/jump.wav",
+    "assets/audio/pounce.wav",
+    "assets/audio/stomp.wav",
+};
+
+/// Load all SFX from disk. Call once at game startup after audio device init.
+pub fn loadSfx() void {
+    if (sfx_loaded) return;
+
+    for (0..SFX_COUNT) |i| {
+        sfx_sounds[i] = rl.loadSound(sfx_paths[i]) catch {
+            // Failed to load, continue with next sound
+            continue;
+        };
+    }
+    sfx_loaded = true;
+}
+
+/// Play a sound effect with the given volume (0.0 to 1.0).
+pub fn playSfx(sfx: SfxType, volume: f32) void {
+    if (!sfx_loaded) return;
+
+    const idx = @intFromEnum(sfx);
+    const sound = sfx_sounds[idx];
+
+    if (sound.frameCount == 0) return; // Sound not loaded
+
+    rl.setSoundVolume(sound, volume);
+    rl.playSound(sound);
+}
+
+/// Unload all SFX from memory. Call once at game shutdown.
+pub fn unloadSfx() void {
+    if (!sfx_loaded) return;
+
+    for (0..SFX_COUNT) |i| {
+        if (sfx_sounds[i].frameCount > 0) {
+            rl.unloadSound(sfx_sounds[i]);
+        }
+    }
+    sfx_loaded = false;
+}
+
+// ============================================================================
+// ChiptunePlayer - Music generation
+// ============================================================================
 
 pub const ChiptunePlayer = struct {
     wave: rl.Wave,
@@ -14,23 +78,8 @@ pub const ChiptunePlayer = struct {
     const Self = @This();
 
     pub fn init() !Self {
-        // Generate a short chiptune wave
         const wave = generateChiptuneWave();
-
-        // Debug: check if wave data is valid
-        std.debug.print("[AUDIO] Wave data pointer: {*}, frame count: {}\n", .{ wave.data, wave.frameCount });
-        std.debug.print("[AUDIO] Wave sampleRate: {}, sampleSize: {}, channels: {}\n", .{ wave.sampleRate, wave.sampleSize, wave.channels });
-
         const sound = rl.loadSoundFromWave(wave);
-        // More important: check if sound loaded successfully
-        std.debug.print("[AUDIO] Sound frameCount after load: {}\n", .{sound.frameCount});
-        std.debug.print("[AUDIO] Sound struct: {*}, frameCount: {}\n", .{ &sound, sound.frameCount });
-        // Note: Printing sound.stream directly is not supported due to type safety in Zig's formatter.
-
-        // Check if sound data is valid (frameCount > 0)
-        if (sound.frameCount == 0) {
-            std.debug.print("[AUDIO] ERROR: Sound frameCount is 0! Sound may not have loaded properly.\n", .{});
-        }
 
         return Self{
             .wave = wave,
@@ -47,31 +96,23 @@ pub const ChiptunePlayer = struct {
     }
 
     pub fn play(self: *Self) void {
-        std.debug.print("[AUDIO] play() called, is_playing = {}\n", .{self.is_playing});
         rl.setSoundVolume(self.sound, config.MUSIC_VOLUME);
         rl.playSound(self.sound);
         self.is_playing = true;
-        std.debug.print("[AUDIO] playSound called. isSoundPlaying: {}\n", .{rl.isSoundPlaying(self.sound)});
     }
 
     pub fn update(self: *Self, _: f32) void {
         if (self.is_playing) {
-            const is_playing = rl.isSoundPlaying(self.sound);
-            std.debug.print("[AUDIO] update(): is_playing = {}, isSoundPlaying = {}\n", .{ self.is_playing, is_playing });
-            if (!is_playing) {
-                std.debug.print("[AUDIO] Sound finished, restarting...\n", .{});
+            if (!rl.isSoundPlaying(self.sound)) {
                 rl.playSound(self.sound);
-                std.debug.print("[AUDIO] playSound called from update. isSoundPlaying: {}\n", .{rl.isSoundPlaying(self.sound)});
             }
         }
     }
 
     pub fn stop(self: *Self) void {
         if (self.is_playing) {
-            std.debug.print("[AUDIO] stop() called. Stopping sound.\n", .{});
             rl.stopSound(self.sound);
             self.is_playing = false;
-            std.debug.print("[AUDIO] Sound stopped. isSoundPlaying: {}\n", .{rl.isSoundPlaying(self.sound)});
         }
     }
 

@@ -11,13 +11,30 @@ $existingProcess = Get-Process -Name "programmer_man" -ErrorAction SilentlyConti
 if ($existingProcess) {
     Write-Host "Stopping existing game process..." -ForegroundColor Yellow
     Stop-Process -Name "programmer_man" -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Milliseconds 800  # Increased wait time for Windows to release file handles
+}
+
+# Additional safety: try to remove the exe if it exists (will fail if still locked)
+$exePath = "zig-out\bin\programmer_man.exe"
+if (Test-Path $exePath) {
+    try {
+        Remove-Item $exePath -Force -ErrorAction Stop
+        Write-Host "Cleaned previous build" -ForegroundColor Gray
+    } catch {
+        Write-Host "WARNING: Could not remove old exe (still locked). Waiting..." -ForegroundColor Yellow
+        Start-Sleep -Milliseconds 1000
+        try {
+            Remove-Item $exePath -Force -ErrorAction Stop
+        } catch {
+            Write-Host "ERROR: Game process is still running or exe is locked!" -ForegroundColor Red
+            Write-Host "Please close all game windows and try again." -ForegroundColor Red
+            Read-Host "Press Enter to exit"
+            exit 1
+        }
+    }
 }
 
 Write-Host "Building game..." -ForegroundColor Yellow
-
-# Clean and build
-Remove-Item "zig-out\bin\programmer_man.exe" -Force -ErrorAction SilentlyContinue
 $buildOutput = zig build 2>&1
 
 if ($LASTEXITCODE -ne 0) {

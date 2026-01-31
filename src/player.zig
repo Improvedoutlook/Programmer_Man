@@ -4,6 +4,7 @@ const std = @import("std");
 const rl = @import("raylib");
 const config = @import("config.zig");
 const Tilemap = @import("tilemap.zig").Tilemap;
+const audio = @import("audio.zig");
 
 pub const PlayerState = enum {
     idle,

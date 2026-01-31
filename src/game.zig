@@ -28,19 +28,13 @@ pub const Game = struct {
 
     pub fn init() Self {
         // Audio device is initialized in main.zig
-        var music_player: ?audio.ChiptunePlayer = audio.ChiptunePlayer.init() catch |err| blk: {
-            std.debug.print("Failed to initialize music: {any}\n", .{err});
-            std.debug.print("Continuing without music...\n", .{});
-            break :blk null;
-        };
+        // Load SFX first
+        audio.loadSfx();
 
-        std.debug.print("Music player created: {}\n", .{music_player != null}); // ADD THIS LINE
+        var music_player: ?audio.ChiptunePlayer = audio.ChiptunePlayer.init() catch null;
 
         if (music_player) |*m| {
-            std.debug.print("About to call play()...\n", .{}); // ADD THIS LINE
             m.play();
-        } else {
-            std.debug.print("Music player is null!\n", .{}); // ADD THIS LINE
         }
 
         return Self{
@@ -57,6 +51,7 @@ pub const Game = struct {
         if (self.music) |*music| {
             music.deinit();
         }
+        audio.unloadSfx();
     }
 
     pub fn loadLevel(self: *Self, level: u8) void {

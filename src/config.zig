@@ -2,19 +2,29 @@
 
 const rl = @import("raylib");
 
-// Screen dimensions
-pub const SCREEN_WIDTH: i32 = 800;
-pub const SCREEN_HEIGHT: i32 = 600;
+// Internal game resolution (fixed for consistent gameplay)
+pub const GAME_WIDTH: i32 = 800;
+pub const GAME_HEIGHT: i32 = 600;
+
+// Window settings (can be resized)
+pub const INITIAL_WINDOW_WIDTH: i32 = 800;
+pub const INITIAL_WINDOW_HEIGHT: i32 = 600;
+pub const MIN_WINDOW_WIDTH: i32 = 400;
+pub const MIN_WINDOW_HEIGHT: i32 = 300;
+pub const WINDOW_RESIZABLE: bool = true;
+
+// For backward compatibility, keep SCREEN_WIDTH/HEIGHT pointing to game resolution
+pub const SCREEN_WIDTH: i32 = GAME_WIDTH;
+pub const SCREEN_HEIGHT: i32 = GAME_HEIGHT;
 
 // Tile dimensions
 pub const TILE_SIZE: i32 = 16;
-pub const TILES_X: i32 = SCREEN_WIDTH / TILE_SIZE; // 50 tiles
-pub const TILES_Y: i32 = SCREEN_HEIGHT / TILE_SIZE; // 37 tiles
+pub const TILES_X: i32 = GAME_WIDTH / TILE_SIZE; // 50 tiles
+pub const TILES_Y: i32 = GAME_HEIGHT / TILE_SIZE; // 37 tiles
 
 // Player dimensions and physics
-// Player dimensions and physics
-pub const PLAYER_WIDTH: f32 = 24; // Was 14, now 24
-pub const PLAYER_HEIGHT: f32 = 28; // Was 16, now 28
+pub const PLAYER_WIDTH: f32 = 24; // Was 14
+pub const PLAYER_HEIGHT: f32 = 36; // Was 16
 pub const PLAYER_RUN_SPEED: f32 = 200.0; // pixels/second
 pub const PLAYER_GRAVITY: f32 = 1200.0; // pixels/second²
 pub const PLAYER_JUMP_IMPULSE: f32 = 450.0; // pixels/second

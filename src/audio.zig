@@ -14,9 +14,10 @@ pub const SfxType = enum {
     Jump,
     Pounce,
     Stomp,
+    Victory,
 };
 
-const SFX_COUNT = 3; // Number of SfxType variants
+const SFX_COUNT = 4; // Number of SfxType variants
 
 var sfx_sounds: [SFX_COUNT]rl.Sound = undefined;
 var sfx_loaded: bool = false;
@@ -25,13 +26,69 @@ const sfx_paths = [SFX_COUNT][:0]const u8{
     "assets/audio/jump.wav",
     "assets/audio/pounce.wav",
     "assets/audio/stomp.wav",
+    "assets/audio/victory.wav",
 };
+
+/// Generate a simple victory/success sound wave (OS-style "ding!")
+pub fn generateVictorySound() rl.Sound {
+    const sample_rate: u32 = 22050;
+    const duration: f32 = 0.8; // Short and sweet
+    const frame_count: u32 = @intFromFloat(sample_rate * duration);
+
+    var wave = rl.Wave{
+        .frameCount = frame_count,
+        .sampleRate = sample_rate,
+        .sampleSize = 16,
+        .channels = 2,
+        .data = undefined,
+    };
+
+    const data_size = frame_count * 2 * @sizeOf(i16);
+    wave.data = @ptrCast(rl.memAlloc(@intCast(data_size)));
+    const samples: [*]i16 = @ptrCast(@alignCast(wave.data));
+
+    // Two-tone ding: C5 -> E5 (classic success sound)
+    const freq1: f32 = 523.25; // C5
+    const freq2: f32 = 659.25; // E5
+
+    var i: u32 = 0;
+    while (i < frame_count) : (i += 1) {
+        const t: f32 = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(sample_rate));
+
+        // Switch from first tone to second tone halfway through
+        const freq = if (t < 0.15) freq1 else freq2;
+
+        // Use sine wave for a clean, pleasant tone
+        const phase = t * freq * 2.0 * std.math.pi;
+        const sine = @sin(phase);
+
+        // Envelope: quick attack, gentle decay
+        const envelope = if (t < 0.05)
+            t / 0.05 // Attack
+        else
+            1.0 - ((t - 0.05) / (duration - 0.05)) * 0.7; // Decay
+
+        const sample_value: i16 = @intFromFloat(sine * envelope * 20000.0);
+        samples[i * 2] = sample_value;
+        samples[i * 2 + 1] = sample_value;
+    }
+
+    const sound = rl.loadSoundFromWave(wave);
+    rl.unloadWave(wave);
+    return sound;
+}
 
 /// Load all SFX from disk. Call once at game startup after audio device init.
 pub fn loadSfx() void {
     if (sfx_loaded) return;
 
     for (0..SFX_COUNT) |i| {
+        // Special case for victory sound - generate it procedurally
+        if (i == @intFromEnum(SfxType.Victory)) {
+            sfx_sounds[i] = generateVictorySound();
+            continue;
+        }
+
         sfx_sounds[i] = rl.loadSound(sfx_paths[i]) catch {
             // Failed to load, continue with next sound
             continue;

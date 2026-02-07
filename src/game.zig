@@ -152,28 +152,30 @@ pub const Game = struct {
         // Check for terminal interaction to submit PR and win
         if (self.all_bugs_defeated) {
             if (self.terminal_pos) |term| {
-                // Terminal bounding box (2 tiles wide, extended height for easier interaction)
                 const term_x = @as(f32, @floatFromInt(term.x * config.TILE_SIZE));
                 const term_y = @as(f32, @floatFromInt(term.y * config.TILE_SIZE));
                 const term_w: f32 = 32.0;
-                const term_h: f32 = 48.0; // Extended to reach down to platform level
+                const term_h: f32 = 48.0;
 
-                // Player bounding box
                 const px = self.player.x;
                 const py = self.player.y;
                 const pw = config.PLAYER_WIDTH;
                 const ph = config.PLAYER_HEIGHT;
 
-                // AABB overlap check
                 const overlaps = px < term_x + term_w and
                     px + pw > term_x and
                     py < term_y + term_h and
                     py + ph > term_y;
 
-                // Check for Enter/Return key (both main keyboard and numpad)
                 const enter_pressed = rl.isKeyPressed(.enter) or rl.isKeyPressed(.kp_enter) or rl.isKeyPressed(.e);
 
                 if (overlaps and enter_pressed) {
+                    // STOP MUSIC AND PLAY VICTORY SOUND
+                    if (self.music) |*music| {
+                        music.stop();
+                    }
+                    audio.playSfx(.Victory, config.SFX_VOLUME);
+
                     self.state = .victory;
                 }
             }
@@ -188,12 +190,20 @@ pub const Game = struct {
 
     fn updateGameOver(self: *Self) void {
         if (rl.isKeyPressed(.r)) {
+            // Restart music when restarting level
+            if (self.music) |*music| {
+                music.play();
+            }
             self.loadLevel(self.current_level);
         }
     }
 
     fn updateVictory(self: *Self) void {
         if (rl.isKeyPressed(.r)) {
+            // Restart music when restarting level
+            if (self.music) |*music| {
+                music.play();
+            }
             self.loadLevel(self.current_level);
         }
     }
@@ -299,7 +309,7 @@ pub const Game = struct {
         const hint = "Bugs defeated! Go to terminal and press Enter";
         const hint_width = 360;
         const hint_x = config.SCREEN_WIDTH / 2 - hint_width / 2;
-        const hint_y = 60;
+        const hint_y = 90;
 
         // Background box
         var bg_color = rl.Color.black;

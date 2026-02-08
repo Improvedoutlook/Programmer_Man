@@ -145,6 +145,9 @@ pub const Game = struct {
         // Update enemies
         self.bugs.update(dt, &self.tilemap);
 
+        // Update sparks
+        self.sparks.update(dt);
+
         // Check player-enemy collisions
         self.bugs.checkPlayerCollision(&self.player);
 

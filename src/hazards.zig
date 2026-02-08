@@ -80,7 +80,10 @@ pub const Spark = struct {
         );
 
         // Add some particle trails (small dots falling behind)
-        const trail_offset: f32 = @mod(self.particle_timer * 100, 10);
+        const total_f: f32 = self.particle_timer * 100.0;
+        const total_i: i32 = @intFromFloat(total_f);
+        const rem_i: i32 = @rem(total_i, @as(i32, 10));
+        const trail_offset: f32 = @floatFromInt(rem_i);
         rl.drawCircle(
             @intFromFloat(self.x),
             @intFromFloat(self.y - trail_offset),
@@ -95,8 +98,7 @@ pub const SparkManager = struct {
     count: usize,
     spawn_timer: f32,
     spawn_interval: f32,
-    spawn_cycle: usize,  // Track which platform to spawn from next
-
+    spawn_cycle: usize, // Track which platform to spawn from next
 
     const Self = @This();
 
@@ -108,9 +110,9 @@ pub const SparkManager = struct {
 
     // Platform positions where sparks spawn (x position in pixels)
     const SPAWN_POSITIONS = [_]SpawnPoint{
-        .{ .x = 20.0 * config.TILE_SIZE, .y = 27.0 * config.TILE_SIZE },  // Platform 2
-        .{ .x = 34.0 * config.TILE_SIZE, .y = 23.0 * config.TILE_SIZE },  // Platform 3
-        .{ .x = 44.0 * config.TILE_SIZE, .y = 17.0 * config.TILE_SIZE },  // High platform
+        .{ .x = 20.0 * @as(f32, config.TILE_SIZE), .y = 27.0 * @as(f32, config.TILE_SIZE) }, // Platform 2
+        .{ .x = 34.0 * @as(f32, config.TILE_SIZE), .y = 23.0 * @as(f32, config.TILE_SIZE) }, // Platform 3
+        .{ .x = 44.0 * @as(f32, config.TILE_SIZE), .y = 17.0 * @as(f32, config.TILE_SIZE) }, // High platform
     };
 
     pub fn init() Self {
@@ -118,7 +120,7 @@ pub const SparkManager = struct {
             .sparks = undefined,
             .count = 0,
             .spawn_timer = 0,
-            .spawn_interval = 2.5,  // Spawn every 2.5 seconds
+            .spawn_interval = 1.0, // Spawn every 1.0 seconds
             .spawn_cycle = 0,
         };
     }
@@ -133,6 +135,7 @@ pub const SparkManager = struct {
         self.spawn_timer += dt;
         if (self.spawn_timer >= self.spawn_interval) {
             self.spawn_timer = 0;
+
             self.spawnNextSpark();
         }
     }
@@ -144,22 +147,22 @@ pub const SparkManager = struct {
                 if (!self.sparks[i].active) {
                     const spawn_point = SPAWN_POSITIONS[self.spawn_cycle];
                     self.sparks[i] = Spark.init(spawn_point.x, spawn_point.y);
-                    
+
                     // Cycle to next platform
                     self.spawn_cycle = (self.spawn_cycle + 1) % SPAWN_POSITIONS.len;
                     return;
                 }
             }
-            return;  // All slots full and active
+            return; // All slots full and active
         }
 
         // Get the current spawn point
         const spawn_point = SPAWN_POSITIONS[self.spawn_cycle];
-        
+
         // Create spark at platform position
         self.sparks[self.count] = Spark.init(spawn_point.x, spawn_point.y);
         self.count += 1;
-        
+
         // Cycle to next platform for next spawn
         self.spawn_cycle = (self.spawn_cycle + 1) % SPAWN_POSITIONS.len;
     }
@@ -184,8 +187,12 @@ pub const SparkManager = struct {
     }
 
     pub fn render(self: *const Self) void {
+        var active_count: usize = 0;
         for (0..self.count) |i| {
-            self.sparks[i].render();
+            if (self.sparks[i].active) {
+                active_count += 1;
+                self.sparks[i].render();
+            }
         }
     }
 

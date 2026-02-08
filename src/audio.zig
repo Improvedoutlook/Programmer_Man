@@ -127,48 +127,86 @@ pub fn unloadSfx() void {
 // ============================================================================
 
 pub const ChiptunePlayer = struct {
-    wave: rl.Wave,
-    sound: rl.Sound,
+    // This struct manages a single procedural music track that loops indefinitely. Commenting out to revert back if desired.
+    // wave: rl.Wave,
+    // sound: rl.Sound,
+
+    // Add Music field for file-based playback
+    music: rl.Music,
     is_playing: bool,
     play_timer: f32,
 
     const Self = @This();
 
     pub fn init() !Self {
-        const wave = generateChiptuneWave();
-        const sound = rl.loadSoundFromWave(wave);
+        // OPTION 1: Use MP3 file (current)
+        const music = try rl.loadMusicStream("assets/music/lost_in_hyperspace.mp3");
+
+        // OPTION 2: Use procedural chiptune (comment out above, uncomment below)
+        // const wave = generateChiptuneWave();
+        // const sound = rl.loadSoundFromWave(wave);
 
         return Self{
-            .wave = wave,
-            .sound = sound,
+            // For MP3:
+            .music = music,
+
+            // For chiptune (comment out above, uncomment below):
+            // .wave = wave,
+            // .sound = sound,
+
             .is_playing = false,
             .play_timer = 0,
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.stop(); // Use your existing stop method
-        rl.unloadSound(self.sound);
-        rl.unloadWave(self.wave);
+        self.stop();
+
+        // For MP3:
+        rl.unloadMusicStream(self.music);
+
+        // For chiptune (uncomment when switching back):
+        // rl.unloadSound(self.sound);
+        // rl.unloadWave(self.wave);
     }
 
     pub fn play(self: *Self) void {
-        rl.setSoundVolume(self.sound, config.MUSIC_VOLUME);
-        rl.playSound(self.sound);
+        // For MP3:
+        rl.setMusicVolume(self.music, config.MUSIC_VOLUME);
+        rl.playMusicStream(self.music);
+
+        // For chiptune (uncomment when switching back):
+        // rl.setSoundVolume(self.sound, config.MUSIC_VOLUME);
+        // rl.playSound(self.sound);
+
         self.is_playing = true;
     }
 
     pub fn update(self: *Self, _: f32) void {
         if (self.is_playing) {
-            if (!rl.isSoundPlaying(self.sound)) {
-                rl.playSound(self.sound);
+            // For MP3 - IMPORTANT: Must call this every frame for streaming
+            rl.updateMusicStream(self.music);
+
+            // Loop the music when it finishes
+            if (!rl.isMusicStreamPlaying(self.music)) {
+                rl.playMusicStream(self.music);
             }
+
+            // For chiptune (uncomment when switching back):
+            // if (!rl.isSoundPlaying(self.sound)) {
+            //     rl.playSound(self.sound);
+            // }
         }
     }
 
     pub fn stop(self: *Self) void {
         if (self.is_playing) {
-            rl.stopSound(self.sound);
+            // For MP3:
+            rl.stopMusicStream(self.music);
+
+            // For chiptune (uncomment when switching back):
+            // rl.stopSound(self.sound);
+
             self.is_playing = false;
         }
     }

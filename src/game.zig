@@ -7,6 +7,7 @@ const Player = @import("player.zig").Player;
 const Tilemap = @import("tilemap.zig").Tilemap;
 const tilemap_builder = @import("tilemap.zig");
 const BugManager = @import("enemy.zig").BugManager;
+const SparkManager = @import("hazards.zig").SparkManager;
 const audio = @import("audio.zig");
 
 pub const GameState = enum {
@@ -20,6 +21,7 @@ pub const Game = struct {
     player: Player,
     tilemap: Tilemap,
     bugs: BugManager,
+    sparks: SparkManager,
     state: GameState,
     current_level: u8,
     music: ?audio.ChiptunePlayer,
@@ -43,6 +45,7 @@ pub const Game = struct {
             .player = Player.init(),
             .tilemap = Tilemap.init(),
             .bugs = BugManager.init(),
+            .sparks = SparkManager.init(),
             .state = .playing,
             .current_level = 0,
             .music = music_player,
@@ -66,6 +69,9 @@ pub const Game = struct {
 
         // Reset bugs
         self.bugs.reset();
+
+        // Reset sparks
+        self.sparks.reset();
 
         // Reset terminal state
         self.all_bugs_defeated = false;
@@ -106,6 +112,9 @@ pub const Game = struct {
 
         // Bug on high platform
         self.bugs.spawn(44, 17, true);
+
+        // NEW: Bug on bottom far-right platform
+        self.bugs.spawn(46, 34, false);
     }
 
     pub fn update(self: *Self, dt: f32) void {
@@ -138,6 +147,9 @@ pub const Game = struct {
 
         // Check player-enemy collisions
         self.bugs.checkPlayerCollision(&self.player);
+
+        // Check player-spark collisions
+        self.sparks.checkPlayerCollision(&self.player);
 
         // Check for player death (game over)
         if (self.player.state == .dead) {
@@ -217,6 +229,9 @@ pub const Game = struct {
 
         // Render terminal
         self.renderTerminal();
+
+        // Render sparks (behind bugs and player)
+        self.sparks.render();
 
         // Render enemies
         self.bugs.render();

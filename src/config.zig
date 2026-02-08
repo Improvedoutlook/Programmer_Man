@@ -38,6 +38,9 @@ pub const BUG_HEIGHT: f32 = 16;
 pub const BUG_WALK_SPEED: f32 = 80.0; // pixels/second (increased for visibility)
 pub const MAX_BUGS: usize = 16;
 
+// Hazard parameters
+pub const MAX_SPARKS: usize = 20; // Maximum number of falling sparks
+
 // Scoring
 pub const POINTS_PER_STOMP: i32 = 100;
 pub const INITIAL_LIVES: i32 = 3;

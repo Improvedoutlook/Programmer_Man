@@ -120,7 +120,7 @@ pub const SparkManager = struct {
             .sparks = undefined,
             .count = 0,
             .spawn_timer = 0,
-            .spawn_interval = 1.0, // Spawn every 1.0 seconds
+            .spawn_interval = 0.5, // Spawn every 0.5 seconds
             .spawn_cycle = 0,
         };
     }

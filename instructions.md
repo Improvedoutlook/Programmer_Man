@@ -56,6 +56,22 @@ Where to find things
 -	Main entry: src/main.zig
 -	Game loop and systems: src/game.zig, src/player.zig, src/tilemap.zig
 
+Zig documentation MCP server (zig-docs)
+-	This workspace is configured with an MCP server that provides live Zig standard library and builtin documentation.
+-	Config: .vscode/mcp.json — uses `npx -y zig-mcp@latest --doc-source local` to serve docs matching the installed Zig version (0.13.0).
+-	Agents MUST use the zig-docs MCP tools when:
+	-	Looking up stdlib APIs (e.g., `std.ArrayList`, `std.mem`, `std.fmt`).
+	-	Checking signatures, return types, or error sets for any `std.*` item.
+	-	Verifying builtin functions (e.g., `@intCast`, `@embedFile`, `@memcpy`).
+	-	Resolving ambiguity about Zig language features or standard patterns.
+-	Available tools (call these before guessing or hallucinating an API):
+	-	`search_std_lib` — search std declarations by name; returns fully qualified names.
+	-	`get_std_lib_item` — fetch full docs, signatures, errors, and examples for a specific item (e.g., "std.mem.Allocator").
+	-	`list_builtin_functions` — list all `@builtin` functions available in Zig.
+	-	`get_builtin_function` — get the signature and docs for a specific builtin by name.
+-	Tip: add `use zigdocs` to a Copilot Chat prompt to explicitly invoke these tools in context.
+-	Do NOT guess stdlib APIs; always verify with the MCP tools above to avoid incorrect function names, missing error handling, or version mismatches.
+
 How to extend this document
 -	Keep entries short and prescriptive; include a one-line rationale and (optionally) a small code example.
 -	Append new rules rather than rewriting the file; include links to relevant source files.

@@ -152,8 +152,8 @@ pub const Player = struct {
         // Update animation
         self.updateAnimation(dt);
 
-        // Check for falling off screen (death)
-        if (self.y > @as(f32, @floatFromInt(config.SCREEN_HEIGHT + 50))) {
+        // Check for falling off level bottom (death)
+        if (self.y > tilemap.getLevelPixelHeight() + 50) {
             self.health = 0; // Instant death when falling off screen
             self.takeDamage();
         }
@@ -204,13 +204,14 @@ pub const Player = struct {
             }
         }
 
-        // Keep player in bounds horizontally
+        // Keep player in bounds horizontally (use level dimensions, not screen)
         if (self.x < half_width) {
             self.x = half_width;
             self.vx = 0;
         }
-        if (self.x > @as(f32, @floatFromInt(config.SCREEN_WIDTH)) - half_width) {
-            self.x = @as(f32, @floatFromInt(config.SCREEN_WIDTH)) - half_width;
+        const level_pixel_w = tilemap.getLevelPixelWidth();
+        if (self.x > level_pixel_w - half_width) {
+            self.x = level_pixel_w - half_width;
             self.vx = 0;
         }
     }

@@ -19,8 +19,8 @@ pub const SCREEN_HEIGHT: i32 = GAME_HEIGHT;
 
 // Tile dimensions
 pub const TILE_SIZE: i32 = 16;
-pub const TILES_X: i32 = GAME_WIDTH / TILE_SIZE; // 50 tiles
-pub const TILES_Y: i32 = GAME_HEIGHT / TILE_SIZE; // 37 tiles
+pub const TILES_X: i32 = GAME_WIDTH / TILE_SIZE; // 50 tiles (visible on screen)
+pub const TILES_Y: i32 = GAME_HEIGHT / TILE_SIZE; // 37 tiles (visible on screen)
 
 // Player dimensions and physics
 pub const PLAYER_WIDTH: f32 = 24; // Was 14
@@ -36,10 +36,10 @@ pub const PLAYER_BOUNCE_FACTOR: f32 = 0.6; // 60% of jump impulse on stomp
 pub const BUG_WIDTH: f32 = 16;
 pub const BUG_HEIGHT: f32 = 16;
 pub const BUG_WALK_SPEED: f32 = 80.0; // pixels/second (increased for visibility)
-pub const MAX_BUGS: usize = 16;
+pub const MAX_BUGS: usize = 32;
 
 // Hazard parameters
-pub const MAX_SPARKS: usize = 20; // Maximum number of falling sparks
+pub const MAX_SPARKS: usize = 40; // Maximum number of falling sparks
 
 // Scoring
 pub const POINTS_PER_STOMP: i32 = 100;
@@ -54,9 +54,13 @@ pub const TRACE_COLOR = rl.Color{ .r = 180, .g = 150, .b = 50, .a = 255 }; // Go
 pub const CHIP_COLOR = rl.Color{ .r = 40, .g = 40, .b = 45, .a = 255 }; // IC chip black
 pub const HUD_COLOR = rl.Color{ .r = 0, .g = 255, .b = 128, .a = 255 }; // Green terminal text
 
-// Level dimensions
-pub const LEVEL_WIDTH: i32 = TILES_X;
-pub const LEVEL_HEIGHT: i32 = TILES_Y;
+// Level dimensions — compile-time maximums for array sizing
+pub const MAX_LEVEL_WIDTH: i32 = 200; // Max tiles wide (3200 px)
+pub const MAX_LEVEL_HEIGHT: i32 = TILES_Y; // Max tiles tall (matches screen height)
+
+// Default level dimensions (used when no level data specifies otherwise)
+pub const DEFAULT_LEVEL_WIDTH: i32 = TILES_X; // 50 tiles — same as screen
+pub const DEFAULT_LEVEL_HEIGHT: i32 = TILES_Y; // 37 tiles — same as screen
 
 // Spawn point (in tile coordinates)
 // Player spawns with feet on top of the ground at tile y=35

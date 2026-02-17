@@ -15,31 +15,54 @@ pub const TileType = enum(u8) {
 };
 
 pub const Tilemap = struct {
-    tiles: [config.LEVEL_HEIGHT][config.LEVEL_WIDTH]TileType,
+    tiles: [config.MAX_LEVEL_HEIGHT][config.MAX_LEVEL_WIDTH]TileType,
+    level_width: i32, // Runtime level width in tiles
+    level_height: i32, // Runtime level height in tiles
 
     const Self = @This();
 
-    pub fn init() Self {
+    /// Create a tilemap with the given dimensions (in tiles).
+    /// Dimensions are clamped to compile-time maximums.
+    pub fn init(level_width: i32, level_height: i32) Self {
+        const w = @min(level_width, config.MAX_LEVEL_WIDTH);
+        const h = @min(level_height, config.MAX_LEVEL_HEIGHT);
         var tilemap = Self{
             .tiles = undefined,
+            .level_width = w,
+            .level_height = h,
         };
-        // Initialize all tiles to empty
-        for (0..@intCast(config.LEVEL_HEIGHT)) |y| {
-            for (0..@intCast(config.LEVEL_WIDTH)) |x| {
+        // Initialize all tiles within level bounds to empty
+        for (0..@intCast(h)) |y| {
+            for (0..@intCast(w)) |x| {
                 tilemap.tiles[y][x] = .empty;
             }
         }
         return tilemap;
     }
 
+    /// Create a tilemap using the default dimensions from config.
+    pub fn initDefault() Self {
+        return init(config.DEFAULT_LEVEL_WIDTH, config.DEFAULT_LEVEL_HEIGHT);
+    }
+
+    /// Level width in pixels.
+    pub fn getLevelPixelWidth(self: *const Self) f32 {
+        return @floatFromInt(self.level_width * config.TILE_SIZE);
+    }
+
+    /// Level height in pixels.
+    pub fn getLevelPixelHeight(self: *const Self) f32 {
+        return @floatFromInt(self.level_height * config.TILE_SIZE);
+    }
+
     pub fn setTile(self: *Self, x: i32, y: i32, tile_type: TileType) void {
-        if (x >= 0 and x < config.LEVEL_WIDTH and y >= 0 and y < config.LEVEL_HEIGHT) {
+        if (x >= 0 and x < self.level_width and y >= 0 and y < self.level_height) {
             self.tiles[@intCast(y)][@intCast(x)] = tile_type;
         }
     }
 
     pub fn getTile(self: *const Self, x: i32, y: i32) TileType {
-        if (x >= 0 and x < config.LEVEL_WIDTH and y >= 0 and y < config.LEVEL_HEIGHT) {
+        if (x >= 0 and x < self.level_width and y >= 0 and y < self.level_height) {
             return self.tiles[@intCast(y)][@intCast(x)];
         }
         return .empty;
@@ -73,8 +96,8 @@ pub const Tilemap = struct {
     }
 
     pub fn render(self: *const Self) void {
-        for (0..@intCast(config.LEVEL_HEIGHT)) |y| {
-            for (0..@intCast(config.LEVEL_WIDTH)) |x| {
+        for (0..@intCast(self.level_height)) |y| {
+            for (0..@intCast(self.level_width)) |x| {
                 const tile = self.tiles[y][x];
                 const px: i32 = @intCast(x * @as(usize, @intCast(config.TILE_SIZE)));
                 const py: i32 = @intCast(y * @as(usize, @intCast(config.TILE_SIZE)));

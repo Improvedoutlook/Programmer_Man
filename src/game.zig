@@ -43,7 +43,7 @@ pub const Game = struct {
 
         return Self{
             .player = Player.init(),
-            .tilemap = Tilemap.init(),
+            .tilemap = Tilemap.initDefault(),
             .bugs = BugManager.init(),
             .sparks = SparkManager.init(),
             .state = .playing,
@@ -64,8 +64,8 @@ pub const Game = struct {
     pub fn loadLevel(self: *Self, level: u8) void {
         self.current_level = level;
 
-        // Reset tilemap
-        self.tilemap = Tilemap.init();
+        // Reset tilemap (keep current dimensions; loadLevel can resize if needed)
+        self.tilemap = Tilemap.initDefault();
 
         // Reset bugs
         self.bugs.reset();

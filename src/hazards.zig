@@ -94,35 +94,41 @@ pub const Spark = struct {
 };
 
 pub const SparkManager = struct {
+    pub const MAX_SPAWN_POINTS: usize = 16;
+
+    pub const SpawnPoint = struct {
+        x: f32,
+        y: f32,
+    };
+
+    const Self = @This();
+
     sparks: [config.MAX_SPARKS]Spark,
     count: usize,
     spawn_timer: f32,
     spawn_interval: f32,
     spawn_cycle: usize, // Track which platform to spawn from next
-
-    const Self = @This();
-
-    // Platform positions where sparks spawn (x, y in pixels)
-    const SpawnPoint = struct {
-        x: f32,
-        y: f32,
-    };
-
-    // Platform positions where sparks spawn (x position in pixels)
-    const SPAWN_POSITIONS = [_]SpawnPoint{
-        .{ .x = 20.0 * @as(f32, config.TILE_SIZE), .y = 27.0 * @as(f32, config.TILE_SIZE) }, // Platform 2
-        .{ .x = 34.0 * @as(f32, config.TILE_SIZE), .y = 23.0 * @as(f32, config.TILE_SIZE) }, // Platform 3
-        .{ .x = 44.0 * @as(f32, config.TILE_SIZE), .y = 17.0 * @as(f32, config.TILE_SIZE) }, // High platform
-    };
+    spawn_positions: [MAX_SPAWN_POINTS]SpawnPoint,
+    spawn_point_count: usize,
 
     pub fn init() Self {
         return Self{
             .sparks = undefined,
             .count = 0,
             .spawn_timer = 0,
-            .spawn_interval = 0.5, // Spawn every 0.5 seconds
+            .spawn_interval = 0.5,
             .spawn_cycle = 0,
+            .spawn_positions = undefined,
+            .spawn_point_count = 0,
         };
+    }
+
+    /// Register a world-pixel position where sparks should rain from.
+    pub fn addSpawnPoint(self: *Self, x: f32, y: f32) void {
+        if (self.spawn_point_count < MAX_SPAWN_POINTS) {
+            self.spawn_positions[self.spawn_point_count] = .{ .x = x, .y = y };
+            self.spawn_point_count += 1;
+        }
     }
 
     pub fn update(self: *Self, dt: f32) void {
@@ -141,30 +147,25 @@ pub const SparkManager = struct {
     }
 
     fn spawnNextSpark(self: *Self) void {
+        if (self.spawn_point_count == 0) return; // No spawn points configured
+
         if (self.count >= config.MAX_SPARKS) {
             // Reuse inactive spark slot
             for (0..self.count) |i| {
                 if (!self.sparks[i].active) {
-                    const spawn_point = SPAWN_POSITIONS[self.spawn_cycle];
+                    const spawn_point = self.spawn_positions[self.spawn_cycle];
                     self.sparks[i] = Spark.init(spawn_point.x, spawn_point.y);
-
-                    // Cycle to next platform
-                    self.spawn_cycle = (self.spawn_cycle + 1) % SPAWN_POSITIONS.len;
+                    self.spawn_cycle = (self.spawn_cycle + 1) % self.spawn_point_count;
                     return;
                 }
             }
             return; // All slots full and active
         }
 
-        // Get the current spawn point
-        const spawn_point = SPAWN_POSITIONS[self.spawn_cycle];
-
-        // Create spark at platform position
+        const spawn_point = self.spawn_positions[self.spawn_cycle];
         self.sparks[self.count] = Spark.init(spawn_point.x, spawn_point.y);
         self.count += 1;
-
-        // Cycle to next platform for next spawn
-        self.spawn_cycle = (self.spawn_cycle + 1) % SPAWN_POSITIONS.len;
+        self.spawn_cycle = (self.spawn_cycle + 1) % self.spawn_point_count;
     }
 
     pub fn checkPlayerCollision(self: *const Self, player: *Player) void {
@@ -200,5 +201,6 @@ pub const SparkManager = struct {
         self.count = 0;
         self.spawn_timer = 0;
         self.spawn_cycle = 0;
+        self.spawn_point_count = 0;
     }
 };

@@ -1,37 +1,60 @@
 {
-    "level1": {
-        "name": "Circuit Board Alpha",
-        "description": "The first level - navigate the motherboard and squash the bugs!",
-        "width": 50,
-        "height": 37,
-        "spawn": { "x": 3, "y": 32 },
-        "bugs": [
-            { "x": 8, "y": 34, "facing": "right" },
-            { "x": 22, "y": 34, "facing": "left" },
-            { "x": 20, "y": 27, "facing": "right" },
-            { "x": 34, "y": 23, "facing": "left" },
-            { "x": 44, "y": 17, "facing": "right" }
-        ],
-        "tiles": {
-            "ground_y": 35,
-            "platforms": [
-                { "x1": 5, "x2": 12, "y": 30, "type": "chip" },
-                { "x1": 18, "x2": 26, "y": 28, "type": "solid" },
-                { "x1": 30, "x2": 38, "y": 24, "type": "solid" },
-                { "x1": 8, "x2": 15, "y": 20, "type": "capacitor" },
-                { "x1": 40, "x2": 48, "y": 18, "type": "chip" }
-            ],
-            "gaps": [
-                { "x1": 15, "x2": 18 },
-                { "x1": 28, "x2": 32 },
-                { "x1": 42, "x2": 45 }
-            ]
-        },
-        "terminal": { "x": 6, "y": 28 }
+    "name": "Circuit Board Alpha",
+    "description": "The first level - navigate the motherboard and squash the bugs!",
+    "width": 100,
+    "height": 37,
+    "spawn": { "x": 3, "y": 35 },
+    "terminal": { "x": 6, "y": 28 },
+    "ground": {
+        "y": 35,
+        "segments": [
+            { "x1": 0,  "x2": 15 },
+            { "x1": 18, "x2": 28 },
+            { "x1": 32, "x2": 42 },
+            { "x1": 45, "x2": 55 },
+            { "x1": 58, "x2": 72 },
+            { "x1": 75, "x2": 88 },
+            { "x1": 91, "x2": 100 }
+        ]
     },
-    "metadata": {
-        "tile_size": 16,
-        "player_size": { "width": 14, "height": 16 },
-        "bug_size": { "width": 16, "height": 16 }
-    }
+    "platforms": [
+        { "x1": 5,  "x2": 12, "y": 30, "tile_type": "chip" },
+        { "x1": 18, "x2": 26, "y": 28, "tile_type": "solid", "sparks": true },
+        { "x1": 14, "x2": 18, "y": 26, "tile_type": "solid" },
+        { "x1": 26, "x2": 30, "y": 26, "tile_type": "solid" },
+        { "x1": 30, "x2": 38, "y": 24, "tile_type": "solid", "sparks": true },
+        { "x1": 27, "x2": 29, "y": 22, "tile_type": "solid" },
+        { "x1": 8,  "x2": 15, "y": 20, "tile_type": "capacitor" },
+        { "x1": 6,  "x2": 9,  "y": 23, "tile_type": "solid" },
+        { "x1": 40, "x2": 48, "y": 18, "tile_type": "chip",   "sparks": true },
+        { "x1": 38, "x2": 41, "y": 21, "tile_type": "solid" },
+
+        { "x1": 52, "x2": 60, "y": 32, "tile_type": "solid" },
+        { "x1": 60, "x2": 64, "y": 30, "tile_type": "solid" },
+        { "x1": 63, "x2": 71, "y": 28, "tile_type": "chip" },
+        { "x1": 71, "x2": 76, "y": 26, "tile_type": "solid" },
+        { "x1": 75, "x2": 83, "y": 24, "tile_type": "solid", "sparks": true },
+        { "x1": 83, "x2": 86, "y": 22, "tile_type": "solid" },
+        { "x1": 85, "x2": 92, "y": 20, "tile_type": "capacitor", "sparks": true },
+        { "x1": 91, "x2": 94, "y": 18, "tile_type": "solid" },
+        { "x1": 93, "x2": 100, "y": 16, "tile_type": "chip",  "sparks": true }
+    ],
+    "decorations": [
+        { "x1": 0, "x2": 100, "y": 15, "tile_type": "trace" },
+        { "x1": 0, "x2": 100, "y": 10, "tile_type": "trace" }
+    ],
+    "bugs": [
+        { "x": 8,  "y": 34, "facing": "right" },
+        { "x": 22, "y": 34, "facing": "left" },
+        { "x": 20, "y": 27, "facing": "right" },
+        { "x": 34, "y": 23, "facing": "left" },
+        { "x": 44, "y": 17, "facing": "right" },
+        { "x": 46, "y": 34, "facing": "left" },
+
+        { "x": 56, "y": 31, "facing": "left" },
+        { "x": 67, "y": 27, "facing": "right" },
+        { "x": 79, "y": 23, "facing": "left" },
+        { "x": 88, "y": 19, "facing": "right" },
+        { "x": 96, "y": 15, "facing": "left" }
+    ]
 }

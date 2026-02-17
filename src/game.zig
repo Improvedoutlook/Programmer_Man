@@ -135,23 +135,52 @@ pub const Game = struct {
         // Reset terminal state
         self.all_bugs_defeated = false;
 
+        // Player spawn defaults (overridden by JSON data when available)
+        var spawn_x: i32 = config.SPAWN_TILE_X;
+        var spawn_y: i32 = config.SPAWN_TILE_Y;
+
         // Load level data
         switch (level) {
             0 => {
-                tilemap_builder.createLevel1(&self.tilemap);
-                self.spawnBugsLevel1();
-                // Terminal on far-left platform (tile y=30, terminal is 2 tiles tall, so start at y=28 to sit on top)
-                self.terminal_pos = .{ .x = 6, .y = 28 };
+                if (tilemap_builder.loadLevel1FromJson(&self.tilemap)) |level_data| {
+                    // Spawn bugs from loaded data
+                    for (0..level_data.bug_count) |i| {
+                        const bug = level_data.bug_spawns[i];
+                        self.bugs.spawn(bug.tile_x, bug.tile_y, bug.facing_right);
+                    }
+
+                    // Register spark spawn points from loaded data
+                    for (0..level_data.spark_count) |i| {
+                        const sp = level_data.spark_spawns[i];
+                        self.sparks.addSpawnPoint(
+                            @as(f32, @floatFromInt(sp.tile_x * config.TILE_SIZE)),
+                            @as(f32, @floatFromInt(sp.tile_y * config.TILE_SIZE)),
+                        );
+                    }
+
+                    self.terminal_pos = .{ .x = level_data.terminal_x, .y = level_data.terminal_y };
+                    spawn_x = level_data.player_spawn_x;
+                    spawn_y = level_data.player_spawn_y;
+                } else |_| {
+                    // Fallback to hardcoded level if JSON parsing fails
+                    tilemap_builder.createLevel1(&self.tilemap);
+                    self.spawnBugsLevel1();
+                    self.spawnSparksLevel1();
+                    self.terminal_pos = .{ .x = 6, .y = 28 };
+                }
             },
             else => {
                 tilemap_builder.createLevel1(&self.tilemap);
                 self.spawnBugsLevel1();
+                self.spawnSparksLevel1();
                 self.terminal_pos = .{ .x = 6, .y = 28 };
             },
         }
 
-        // Reset player
+        // Reset player and position at the level's spawn point
         self.player = Player.init();
+        self.player.x = @as(f32, @floatFromInt(spawn_x * config.TILE_SIZE)) + config.PLAYER_WIDTH / 2;
+        self.player.y = @as(f32, @floatFromInt(spawn_y * config.TILE_SIZE));
         self.state = .playing;
     }
 
@@ -174,6 +203,14 @@ pub const Game = struct {
 
         // NEW: Bug on bottom far-right platform
         self.bugs.spawn(46, 34, false);
+    }
+
+    /// Fallback: register hardcoded spark spawn points for Level 1.
+    fn spawnSparksLevel1(self: *Self) void {
+        const ts: f32 = @floatFromInt(config.TILE_SIZE);
+        self.sparks.addSpawnPoint(20.0 * ts, 27.0 * ts); // Platform 2
+        self.sparks.addSpawnPoint(34.0 * ts, 23.0 * ts); // Platform 3
+        self.sparks.addSpawnPoint(44.0 * ts, 17.0 * ts); // Platform 5
     }
 
     pub fn update(self: *Self, dt: f32) void {

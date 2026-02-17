@@ -207,6 +207,154 @@ pub const Tilemap = struct {
     }
 };
 
+// ---------------------------------------------------------------------------
+// JSON level loading
+// ---------------------------------------------------------------------------
+
+const JsonCoord = struct { x: i32, y: i32 };
+const JsonSegment = struct { x1: i32, x2: i32 };
+const JsonGround = struct { y: i32, segments: []const JsonSegment };
+const JsonPlatform = struct {
+    x1: i32,
+    x2: i32,
+    y: i32,
+    tile_type: []const u8,
+    sparks: bool = false,
+};
+const JsonDecoration = struct {
+    x1: i32,
+    x2: i32,
+    y: i32,
+    tile_type: []const u8,
+};
+const JsonBug = struct {
+    x: i32,
+    y: i32,
+    facing: []const u8,
+};
+const JsonLevelSchema = struct {
+    name: []const u8,
+    description: []const u8,
+    width: i32,
+    height: i32,
+    spawn: JsonCoord,
+    terminal: JsonCoord,
+    ground: JsonGround,
+    platforms: []const JsonPlatform,
+    decorations: []const JsonDecoration,
+    bugs: []const JsonBug,
+};
+
+pub const MAX_SPAWN_ENTRIES: usize = 32;
+
+pub const BugSpawn = struct {
+    tile_x: i32,
+    tile_y: i32,
+    facing_right: bool,
+};
+
+pub const SparkSpawn = struct {
+    tile_x: i32,
+    tile_y: i32,
+};
+
+pub const LevelData = struct {
+    player_spawn_x: i32,
+    player_spawn_y: i32,
+    terminal_x: i32,
+    terminal_y: i32,
+    bug_spawns: [MAX_SPAWN_ENTRIES]BugSpawn,
+    bug_count: usize,
+    spark_spawns: [MAX_SPAWN_ENTRIES]SparkSpawn,
+    spark_count: usize,
+};
+
+fn jsonTileType(name: []const u8) TileType {
+    if (std.mem.eql(u8, name, "solid")) return .solid;
+    if (std.mem.eql(u8, name, "chip")) return .chip;
+    if (std.mem.eql(u8, name, "trace")) return .trace;
+    if (std.mem.eql(u8, name, "capacitor")) return .capacitor;
+    return .solid;
+}
+
+/// Load Level 1 from the JSON data file at runtime.
+/// Populates the tilemap and returns spawn / config metadata.
+pub fn loadLevel1FromJson(tilemap: *Tilemap) !LevelData {
+    // Read JSON file from disk (relative to CWD / project root)
+    const file = try std.fs.cwd().openFile("assets/data/level1.json", .{});
+    defer file.close();
+    const json_bytes = try file.readToEndAlloc(std.heap.page_allocator, 128 * 1024);
+    defer std.heap.page_allocator.free(json_bytes);
+
+    var parsed = try std.json.parseFromSlice(
+        JsonLevelSchema,
+        std.heap.page_allocator,
+        json_bytes,
+        .{ .ignore_unknown_fields = true },
+    );
+    defer parsed.deinit();
+
+    const level = parsed.value;
+
+    // Initialise tilemap with level dimensions
+    tilemap.* = Tilemap.init(level.width, level.height);
+
+    // Ground segments
+    for (level.ground.segments) |seg| {
+        fillHorizontal(tilemap, seg.x1, seg.x2, level.ground.y, .solid);
+    }
+
+    // Platforms
+    for (level.platforms) |p| {
+        fillHorizontal(tilemap, p.x1, p.x2, p.y, jsonTileType(p.tile_type));
+    }
+
+    // Decorations
+    for (level.decorations) |d| {
+        fillHorizontal(tilemap, d.x1, d.x2, d.y, jsonTileType(d.tile_type));
+    }
+
+    // Build result
+    var result = LevelData{
+        .player_spawn_x = level.spawn.x,
+        .player_spawn_y = level.spawn.y,
+        .terminal_x = level.terminal.x,
+        .terminal_y = level.terminal.y,
+        .bug_spawns = undefined,
+        .bug_count = 0,
+        .spark_spawns = undefined,
+        .spark_count = 0,
+    };
+
+    // Collect bug spawns
+    for (level.bugs) |bug| {
+        if (result.bug_count >= MAX_SPAWN_ENTRIES) break;
+        result.bug_spawns[result.bug_count] = .{
+            .tile_x = bug.x,
+            .tile_y = bug.y,
+            .facing_right = std.mem.eql(u8, bug.facing, "right"),
+        };
+        result.bug_count += 1;
+    }
+
+    // Collect spark spawns from platforms flagged with sparks: true
+    for (level.platforms) |p| {
+        if (p.sparks and result.spark_count < MAX_SPAWN_ENTRIES) {
+            result.spark_spawns[result.spark_count] = .{
+                .tile_x = @divTrunc(p.x1 + p.x2, 2),
+                .tile_y = p.y - 1,
+            };
+            result.spark_count += 1;
+        }
+    }
+
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// Legacy / fallback level builder (hardcoded)
+// ---------------------------------------------------------------------------
+
 // Level data builder functions
 pub fn createLevel1(tilemap: *Tilemap) void {
     // Hardware-themed platforming level

@@ -150,25 +150,27 @@ pub const Tilemap = struct {
         rl.drawRectangle(px + 4, py + 4, 8, 2, rl.Color{ .r = 100, .g = 100, .b = 200, .a = 255 });
     }
 
-    pub fn renderBackground(_: *const Self) void {
+    pub fn renderBackground(self: *const Self) void {
         // Multi-layer parallax-style background (static for MVP)
+        const lw = self.level_width * config.TILE_SIZE;
+        const lh = self.level_height * config.TILE_SIZE;
 
         // Base PCB color
-        rl.drawRectangle(0, 0, config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.BACKGROUND_COLOR);
+        rl.drawRectangle(0, 0, lw, lh, config.BACKGROUND_COLOR);
 
         // Background circuit traces (decorative)
         const trace_color = rl.Color{ .r = 30, .g = 45, .b = 55, .a = 255 };
 
         // Horizontal traces
         var y: i32 = 50;
-        while (y < config.SCREEN_HEIGHT) : (y += 80) {
-            rl.drawRectangle(0, y, config.SCREEN_WIDTH, 2, trace_color);
+        while (y < lh) : (y += 80) {
+            rl.drawRectangle(0, y, lw, 2, trace_color);
         }
 
         // Vertical traces
         var x: i32 = 100;
-        while (x < config.SCREEN_WIDTH) : (x += 120) {
-            rl.drawRectangle(x, 0, 2, config.SCREEN_HEIGHT, trace_color);
+        while (x < lw) : (x += 120) {
+            rl.drawRectangle(x, 0, 2, lh, trace_color);
         }
 
         // Background chips (decorative, far back)

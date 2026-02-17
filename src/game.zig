@@ -17,11 +17,55 @@ pub const GameState = enum {
     victory,
 };
 
+pub const Camera = struct {
+    rl_camera: rl.Camera2D,
+
+    pub fn init() Camera {
+        return Camera{
+            .rl_camera = .{
+                .offset = .{ .x = @as(f32, @floatFromInt(config.GAME_WIDTH)) / 2.0, .y = @as(f32, @floatFromInt(config.GAME_HEIGHT)) / 2.0 },
+                .target = .{ .x = @as(f32, @floatFromInt(config.GAME_WIDTH)) / 2.0, .y = @as(f32, @floatFromInt(config.GAME_HEIGHT)) / 2.0 },
+                .rotation = 0,
+                .zoom = 1.0,
+            },
+        };
+    }
+
+    /// Follow the player, clamping so the camera never shows beyond the world bounds.
+    pub fn follow(self: *Camera, player_x: f32, player_y: f32, level_pixel_w: f32, level_pixel_h: f32) void {
+        const half_w = @as(f32, @floatFromInt(config.GAME_WIDTH)) / 2.0;
+        const half_h = @as(f32, @floatFromInt(config.GAME_HEIGHT)) / 2.0;
+
+        // Target = player position, clamped so edges never exceed world bounds
+        var tx = player_x;
+        var ty = player_y;
+
+        // Clamp horizontal
+        if (tx < half_w) tx = half_w;
+        if (tx > level_pixel_w - half_w) tx = level_pixel_w - half_w;
+
+        // Clamp vertical
+        if (ty < half_h) ty = half_h;
+        if (ty > level_pixel_h - half_h) ty = level_pixel_h - half_h;
+
+        // If level is smaller than the viewport, centre it
+        if (level_pixel_w <= @as(f32, @floatFromInt(config.GAME_WIDTH))) {
+            tx = level_pixel_w / 2.0;
+        }
+        if (level_pixel_h <= @as(f32, @floatFromInt(config.GAME_HEIGHT))) {
+            ty = level_pixel_h / 2.0;
+        }
+
+        self.rl_camera.target = .{ .x = tx, .y = ty };
+    }
+};
+
 pub const Game = struct {
     player: Player,
     tilemap: Tilemap,
     bugs: BugManager,
     sparks: SparkManager,
+    camera: Camera,
     state: GameState,
     current_level: u8,
     music: ?audio.ChiptunePlayer,
@@ -46,6 +90,7 @@ pub const Game = struct {
             .tilemap = Tilemap.initDefault(),
             .bugs = BugManager.init(),
             .sparks = SparkManager.init(),
+            .camera = Camera.init(),
             .state = .playing,
             .current_level = 0,
             .music = music_player,
@@ -148,6 +193,14 @@ pub const Game = struct {
         // Update sparks
         self.sparks.update(dt);
 
+        // Update camera to follow player
+        self.camera.follow(
+            self.player.x,
+            self.player.y - config.PLAYER_HEIGHT / 2.0, // Centre on player's middle
+            self.tilemap.getLevelPixelWidth(),
+            self.tilemap.getLevelPixelHeight(),
+        );
+
         // Check player-enemy collisions
         self.bugs.checkPlayerCollision(&self.player);
 
@@ -224,25 +277,30 @@ pub const Game = struct {
     }
 
     pub fn render(self: *Self) void {
-        // Render background first
-        self.tilemap.renderBackground();
+        // === World-space rendering (scrolls with camera) ===
+        self.camera.rl_camera.begin();
+        {
+            // Render background first
+            self.tilemap.renderBackground();
 
-        // Render tilemap
-        self.tilemap.render();
+            // Render tilemap
+            self.tilemap.render();
 
-        // Render terminal
-        self.renderTerminal();
+            // Render terminal
+            self.renderTerminal();
 
-        // Render sparks (behind bugs and player)
-        self.sparks.render();
+            // Render sparks (behind bugs and player)
+            self.sparks.render();
 
-        // Render enemies
-        self.bugs.render();
+            // Render enemies
+            self.bugs.render();
 
-        // Render player
-        self.player.render();
+            // Render player
+            self.player.render();
+        }
+        self.camera.rl_camera.end();
 
-        // Render HUD
+        // === Screen-space rendering (HUD & overlays — not affected by camera) ===
         self.player.renderHUD();
 
         // Render terminal hint if all bugs defeated

@@ -158,6 +158,9 @@ pub const Game = struct {
                         );
                     }
 
+                    // Tell spark manager how tall the level is (for deactivation)
+                    self.sparks.level_pixel_height = self.tilemap.getLevelPixelHeight();
+
                     self.terminal_pos = .{ .x = level_data.terminal_x, .y = level_data.terminal_y };
                     spawn_x = level_data.player_spawn_x;
                     spawn_y = level_data.player_spawn_y;

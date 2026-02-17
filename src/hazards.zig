@@ -28,7 +28,7 @@ pub const Spark = struct {
         };
     }
 
-    pub fn update(self: *Self, dt: f32) void {
+    pub fn update(self: *Self, dt: f32, level_pixel_height: f32) void {
         if (!self.active) return;
 
         // Fall downward
@@ -37,8 +37,8 @@ pub const Spark = struct {
         // Update particle effect timer
         self.particle_timer += dt;
 
-        // Deactivate if off screen (fell below game area)
-        if (self.y > @as(f32, @floatFromInt(config.SCREEN_HEIGHT))) {
+        // Deactivate if below level bounds
+        if (self.y > level_pixel_height) {
             self.active = false;
         }
     }
@@ -94,7 +94,7 @@ pub const Spark = struct {
 };
 
 pub const SparkManager = struct {
-    pub const MAX_SPAWN_POINTS: usize = 16;
+    pub const MAX_SPAWN_POINTS: usize = 32;
 
     pub const SpawnPoint = struct {
         x: f32,
@@ -110,6 +110,7 @@ pub const SparkManager = struct {
     spawn_cycle: usize, // Track which platform to spawn from next
     spawn_positions: [MAX_SPAWN_POINTS]SpawnPoint,
     spawn_point_count: usize,
+    level_pixel_height: f32, // World height in pixels — used for spark deactivation
 
     pub fn init() Self {
         return Self{
@@ -120,6 +121,7 @@ pub const SparkManager = struct {
             .spawn_cycle = 0,
             .spawn_positions = undefined,
             .spawn_point_count = 0,
+            .level_pixel_height = @floatFromInt(config.SCREEN_HEIGHT),
         };
     }
 
@@ -134,7 +136,7 @@ pub const SparkManager = struct {
     pub fn update(self: *Self, dt: f32) void {
         // Update existing sparks
         for (0..self.count) |i| {
-            self.sparks[i].update(dt);
+            self.sparks[i].update(dt, self.level_pixel_height);
         }
 
         // Spawn new sparks periodically
@@ -202,5 +204,6 @@ pub const SparkManager = struct {
         self.spawn_timer = 0;
         self.spawn_cycle = 0;
         self.spawn_point_count = 0;
+        self.level_pixel_height = @floatFromInt(config.SCREEN_HEIGHT);
     }
 };

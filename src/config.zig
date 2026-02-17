@@ -39,7 +39,7 @@ pub const BUG_WALK_SPEED: f32 = 80.0; // pixels/second (increased for visibility
 pub const MAX_BUGS: usize = 32;
 
 // Hazard parameters
-pub const MAX_SPARKS: usize = 40; // Maximum number of falling sparks
+pub const MAX_SPARKS: usize = 64; // Maximum number of falling sparks
 
 // Scoring
 pub const POINTS_PER_STOMP: i32 = 100;

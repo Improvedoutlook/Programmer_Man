@@ -337,11 +337,19 @@ pub fn loadLevel1FromJson(tilemap: *Tilemap) !LevelData {
         result.bug_count += 1;
     }
 
-    // Collect spark spawns from platforms flagged with sparks: true
+    // Collect spark spawns from platforms flagged with sparks: true.
+    // Spread spawn points across wide platforms (one every ~3 tiles).
     for (level.platforms) |p| {
-        if (p.sparks and result.spark_count < MAX_SPAWN_ENTRIES) {
+        if (!p.sparks) continue;
+        const plat_width = p.x2 - p.x1;
+        const spark_spacing: i32 = 3; // tiles between spawn points
+        const num_points = @max(@as(i32, 1), @divTrunc(plat_width, spark_spacing));
+        var si: i32 = 0;
+        while (si < num_points) : (si += 1) {
+            if (result.spark_count >= MAX_SPAWN_ENTRIES) break;
+            const offset = @divTrunc(plat_width * (2 * si + 1), 2 * num_points);
             result.spark_spawns[result.spark_count] = .{
-                .tile_x = @divTrunc(p.x1 + p.x2, 2),
+                .tile_x = p.x1 + offset,
                 .tile_y = p.y - 1,
             };
             result.spark_count += 1;

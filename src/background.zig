@@ -29,7 +29,7 @@ const CircuitTrace = struct {
 pub const Background = struct {
     particles: [64]Particle,
     particle_count: usize,
-    circuit_traces: [12]CircuitTrace,
+    circuit_traces: [16]CircuitTrace,
     time: f32,
     rng: std.rand.DefaultPrng,
 
@@ -46,10 +46,10 @@ pub const Background = struct {
         };
 
         // Initialize circuit traces (horizontal and vertical lines across screen)
-        self.circuit_traces[0] = .{ .x1 = 50, .y1 = 100, .x2 = 750, .y2 = 100, .pulse_offset = 0, .is_horizontal = true };
-        self.circuit_traces[1] = .{ .x1 = 50, .y1 = 200, .x2 = 750, .y2 = 200, .pulse_offset = 0.5, .is_horizontal = true };
-        self.circuit_traces[2] = .{ .x1 = 50, .y1 = 300, .x2 = 750, .y2 = 300, .pulse_offset = 1.0, .is_horizontal = true };
-        self.circuit_traces[3] = .{ .x1 = 50, .y1 = 500, .x2 = 750, .y2 = 500, .pulse_offset = 1.5, .is_horizontal = true };
+        self.circuit_traces[0] = .{ .x1 = 50, .y1 = 100, .x2 = 1150, .y2 = 100, .pulse_offset = 0, .is_horizontal = true };
+        self.circuit_traces[1] = .{ .x1 = 50, .y1 = 200, .x2 = 1150, .y2 = 200, .pulse_offset = 0.5, .is_horizontal = true };
+        self.circuit_traces[2] = .{ .x1 = 50, .y1 = 300, .x2 = 1150, .y2 = 300, .pulse_offset = 1.0, .is_horizontal = true };
+        self.circuit_traces[3] = .{ .x1 = 50, .y1 = 500, .x2 = 1150, .y2 = 500, .pulse_offset = 1.5, .is_horizontal = true };
 
         self.circuit_traces[4] = .{ .x1 = 150, .y1 = 50, .x2 = 150, .y2 = 550, .pulse_offset = 0.25, .is_horizontal = false };
         self.circuit_traces[5] = .{ .x1 = 300, .y1 = 50, .x2 = 300, .y2 = 550, .pulse_offset = 0.75, .is_horizontal = false };
@@ -61,6 +61,12 @@ pub const Background = struct {
         self.circuit_traces[9] = .{ .x1 = 400, .y1 = 400, .x2 = 500, .y2 = 300, .pulse_offset = 0.8, .is_horizontal = false };
         self.circuit_traces[10] = .{ .x1 = 600, .y1 = 150, .x2 = 700, .y2 = 250, .pulse_offset = 1.3, .is_horizontal = false };
         self.circuit_traces[11] = .{ .x1 = 200, .y1 = 450, .x2 = 350, .y2 = 500, .pulse_offset = 1.8, .is_horizontal = false };
+
+        // Extended traces for parallax scrolling coverage
+        self.circuit_traces[12] = .{ .x1 = 750, .y1 = 50, .x2 = 750, .y2 = 550, .pulse_offset = 2.0, .is_horizontal = false };
+        self.circuit_traces[13] = .{ .x1 = 900, .y1 = 50, .x2 = 900, .y2 = 550, .pulse_offset = 2.25, .is_horizontal = false };
+        self.circuit_traces[14] = .{ .x1 = 800, .y1 = 100, .x2 = 950, .y2 = 200, .pulse_offset = 2.5, .is_horizontal = false };
+        self.circuit_traces[15] = .{ .x1 = 950, .y1 = 350, .x2 = 1100, .y2 = 450, .pulse_offset = 2.75, .is_horizontal = false };
 
         return self;
     }
@@ -111,30 +117,44 @@ pub const Background = struct {
         }
     }
 
-    pub fn render(self: *const Self) void {
-        // Draw subtle grid pattern
+    pub fn render(self: *const Self, camera_x: f32) void {
+        // Parallax offset — background scrolls slower than the world
+        const parallax_x = camera_x * config.BG_PARALLAX_FACTOR;
+        const shift_i: i32 = @intFromFloat(@round(parallax_x));
+
+        // Draw subtle grid pattern (wraps seamlessly with parallax)
         const grid_alpha: u8 = 15;
-        var x: i32 = 0;
-        while (x < config.SCREEN_WIDTH) : (x += config.TILE_SIZE * 2) {
-            rl.drawLine(x, 0, x, config.SCREEN_HEIGHT, rl.Color{ .r = 40, .g = 60, .b = 80, .a = grid_alpha });
+        const grid_color = rl.Color{ .r = 40, .g = 60, .b = 80, .a = grid_alpha };
+        const grid_step: i32 = config.TILE_SIZE * 2;
+        const grid_step_f: f32 = @floatFromInt(grid_step);
+        const grid_off: i32 = @intFromFloat(@mod(parallax_x, grid_step_f));
+
+        // Vertical grid lines (wrap with parallax)
+        var gx: i32 = -grid_off;
+        while (gx < config.SCREEN_WIDTH + grid_step) : (gx += grid_step) {
+            rl.drawLine(gx, 0, gx, config.SCREEN_HEIGHT, grid_color);
         }
-        var y: i32 = 0;
-        while (y < config.SCREEN_HEIGHT) : (y += config.TILE_SIZE * 2) {
-            rl.drawLine(0, y, config.SCREEN_WIDTH, y, rl.Color{ .r = 40, .g = 60, .b = 80, .a = grid_alpha });
+        // Horizontal grid lines (no vertical parallax)
+        var gy: i32 = 0;
+        while (gy < config.SCREEN_HEIGHT) : (gy += grid_step) {
+            rl.drawLine(0, gy, config.SCREEN_WIDTH, gy, grid_color);
         }
 
-        // Draw circuit traces with pulsing effect
+        // Draw circuit traces with pulsing effect (shifted by parallax)
         for (self.circuit_traces) |trace| {
             const pulse = @sin(self.time * 2.0 + trace.pulse_offset * 3.14159);
             const brightness: u8 = @intFromFloat(80.0 + pulse * 40.0);
             const trace_color = rl.Color{ .r = brightness, .g = brightness + 30, .b = brightness + 50, .a = 120 };
 
-            // Main trace line
-            rl.drawLine(trace.x1, trace.y1, trace.x2, trace.y2, trace_color);
+            // Main trace line (parallax-shifted x)
+            const x1 = trace.x1 - shift_i;
+            const x2 = trace.x2 - shift_i;
+            rl.drawLine(x1, trace.y1, x2, trace.y2, trace_color);
 
             // Draw pulsing "data packet" moving along trace
             const packet_pos = @mod(self.time * 0.3 + trace.pulse_offset, 1.0);
-            const packet_x: i32 = @intFromFloat(@as(f32, @floatFromInt(trace.x1)) + packet_pos * @as(f32, @floatFromInt(trace.x2 - trace.x1)));
+            const packet_x_world: i32 = @intFromFloat(@as(f32, @floatFromInt(trace.x1)) + packet_pos * @as(f32, @floatFromInt(trace.x2 - trace.x1)));
+            const packet_x = packet_x_world - shift_i;
             const packet_y: i32 = @intFromFloat(@as(f32, @floatFromInt(trace.y1)) + packet_pos * @as(f32, @floatFromInt(trace.y2 - trace.y1)));
 
             const glow_color = rl.Color{ .r = 100, .g = 220, .b = 255, .a = 200 };
@@ -142,10 +162,9 @@ pub const Background = struct {
             rl.drawCircle(packet_x, packet_y, 2, rl.Color.white);
         }
 
-        // Draw connection nodes at trace intersections
+        // Draw connection nodes at trace intersections (parallax-shifted)
         for (self.circuit_traces, 0..) |trace1, i| {
             for (self.circuit_traces[i + 1 ..], i + 1..) |trace2, j| {
-                // Simple intersection detection (only for perpendicular lines)
                 if (trace1.is_horizontal != trace2.is_horizontal) {
                     const node_pulse = @sin(self.time * 3.0 + @as(f32, @floatFromInt(i + j)));
                     const node_alpha: u8 = @intFromFloat(150.0 + node_pulse * 50.0);
@@ -155,25 +174,27 @@ pub const Background = struct {
                             trace1.y1 >= trace2.y1 and trace1.y1 <= trace2.y2)
                         {
                             const node_color = rl.Color{ .r = 255, .g = 200, .b = 100, .a = node_alpha };
-                            rl.drawCircle(trace2.x1, trace1.y1, 4, node_color);
-                            rl.drawCircle(trace2.x1, trace1.y1, 2, rl.Color{ .r = 255, .g = 255, .b = 200, .a = 255 });
+                            const node_x = trace2.x1 - shift_i;
+                            rl.drawCircle(node_x, trace1.y1, 4, node_color);
+                            rl.drawCircle(node_x, trace1.y1, 2, rl.Color{ .r = 255, .g = 255, .b = 200, .a = 255 });
                         }
                     }
                 }
             }
         }
 
-        // Draw particles (electrical sparks/data)
+        // Draw particles (electrical sparks/data, parallax-shifted)
         for (self.particles[0..self.particle_count]) |particle| {
             const alpha_factor = particle.life / particle.max_life;
             const alpha: u8 = @intFromFloat(alpha_factor * 255.0);
             const color = rl.Color{ .r = particle.color.r, .g = particle.color.g, .b = particle.color.b, .a = alpha };
 
             const size: f32 = 2.0 + (1.0 - alpha_factor) * 2.0;
-            rl.drawCircleV(rl.Vector2{ .x = particle.x, .y = particle.y }, size, color);
+            const px = particle.x - parallax_x;
+            rl.drawCircleV(rl.Vector2{ .x = px, .y = particle.y }, size, color);
 
             // Glow effect
-            rl.drawCircleV(rl.Vector2{ .x = particle.x, .y = particle.y }, size + 1, rl.Color{ .r = color.r, .g = color.g, .b = color.b, .a = alpha / 2 });
+            rl.drawCircleV(rl.Vector2{ .x = px, .y = particle.y }, size + 1, rl.Color{ .r = color.r, .g = color.g, .b = color.b, .a = alpha / 2 });
         }
     }
 };

@@ -58,6 +58,14 @@ pub const Camera = struct {
 
         self.rl_camera.target = .{ .x = tx, .y = ty };
     }
+
+    /// Return the top-left corner of the visible area in world coordinates.
+    pub fn getWorldOffset(self: *const Camera) struct { x: f32, y: f32 } {
+        return .{
+            .x = self.rl_camera.target.x - self.rl_camera.offset.x,
+            .y = self.rl_camera.target.y - self.rl_camera.offset.y,
+        };
+    }
 };
 
 pub const Game = struct {
@@ -104,6 +112,12 @@ pub const Game = struct {
             music.deinit();
         }
         audio.unloadSfx();
+    }
+
+    /// Camera's world-space X offset (pixels from left edge of level).
+    pub fn getCameraWorldX(self: *const Self) f32 {
+        const wo = self.camera.getWorldOffset();
+        return wo.x;
     }
 
     pub fn loadLevel(self: *Self, level: u8) void {
@@ -283,8 +297,9 @@ pub const Game = struct {
             // Render background first
             self.tilemap.renderBackground();
 
-            // Render tilemap
-            self.tilemap.render();
+            // Render tilemap (viewport-culled)
+            const cam_wo = self.camera.getWorldOffset();
+            self.tilemap.render(cam_wo.x, cam_wo.y);
 
             // Render terminal
             self.renderTerminal();

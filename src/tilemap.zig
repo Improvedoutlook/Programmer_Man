@@ -95,9 +95,26 @@ pub const Tilemap = struct {
         return false;
     }
 
-    pub fn render(self: *const Self) void {
-        for (0..@intCast(self.level_height)) |y| {
-            for (0..@intCast(self.level_width)) |x| {
+    /// Render visible tiles, culling to the camera viewport.
+    /// `cam_x` / `cam_y` are the top-left world-pixel coordinates of the viewport.
+    pub fn render(self: *const Self, cam_x: f32, cam_y: f32) void {
+        const ts: f32 = @floatFromInt(config.TILE_SIZE);
+        const vw: f32 = @floatFromInt(config.GAME_WIDTH);
+        const vh: f32 = @floatFromInt(config.GAME_HEIGHT);
+
+        // Visible tile range with 1-tile padding for partially visible edges
+        const col0 = @max(@as(i32, 0), @as(i32, @intFromFloat(@floor(cam_x / ts))) - 1);
+        const col1 = @min(self.level_width, @as(i32, @intFromFloat(@ceil((cam_x + vw) / ts))) + 1);
+        const row0 = @max(@as(i32, 0), @as(i32, @intFromFloat(@floor(cam_y / ts))) - 1);
+        const row1 = @min(self.level_height, @as(i32, @intFromFloat(@ceil((cam_y + vh) / ts))) + 1);
+
+        const start_col: usize = @intCast(col0);
+        const end_col: usize = @intCast(col1);
+        const start_row: usize = @intCast(row0);
+        const end_row: usize = @intCast(row1);
+
+        for (start_row..end_row) |y| {
+            for (start_col..end_col) |x| {
                 const tile = self.tiles[y][x];
                 const px: i32 = @intCast(x * @as(usize, @intCast(config.TILE_SIZE)));
                 const py: i32 = @intCast(y * @as(usize, @intCast(config.TILE_SIZE)));

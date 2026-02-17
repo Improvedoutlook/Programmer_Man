@@ -54,6 +54,9 @@ pub const TRACE_COLOR = rl.Color{ .r = 180, .g = 150, .b = 50, .a = 255 }; // Go
 pub const CHIP_COLOR = rl.Color{ .r = 40, .g = 40, .b = 45, .a = 255 }; // IC chip black
 pub const HUD_COLOR = rl.Color{ .r = 0, .g = 255, .b = 128, .a = 255 }; // Green terminal text
 
+// Background parallax
+pub const BG_PARALLAX_FACTOR: f32 = 0.15; // Far background scrolls at 15% of camera speed
+
 // Level dimensions — compile-time maximums for array sizing
 pub const MAX_LEVEL_WIDTH: i32 = 200; // Max tiles wide (3200 px)
 pub const MAX_LEVEL_HEIGHT: i32 = TILES_Y; // Max tiles tall (matches screen height)

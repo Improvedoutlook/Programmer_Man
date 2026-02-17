@@ -63,7 +63,7 @@ pub fn main() !void {
             rl.clearBackground(config.BACKGROUND_COLOR);
 
             // Render background effects first (behind everything)
-            background.render(); // ← ADD THIS! Draws the cool effects
+            background.render(game.getCameraWorldX()); // Parallax background
 
             // Render game on top of background
             game.render();

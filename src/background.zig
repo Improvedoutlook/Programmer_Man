@@ -26,10 +26,22 @@ const CircuitTrace = struct {
     is_horizontal: bool,
 };
 
+/// Decorative IC chip with blinking activity LED
+const ChipElement = struct {
+    x: i32, // background-world x position
+    y: i32,
+    width: i32,
+    height: i32,
+    pins_per_side: i32,
+    phase: f32, // LED blink phase offset
+    label_char: u8, // single char stamped on chip body
+};
+
 pub const Background = struct {
     particles: [64]Particle,
     particle_count: usize,
     circuit_traces: [16]CircuitTrace,
+    chips: [config.BG_CHIP_COUNT]ChipElement,
     time: f32,
     rng: std.rand.DefaultPrng,
 
@@ -41,6 +53,7 @@ pub const Background = struct {
             .particles = undefined,
             .particle_count = 0,
             .circuit_traces = undefined,
+            .chips = undefined,
             .time = 0,
             .rng = rng,
         };
@@ -67,6 +80,29 @@ pub const Background = struct {
         self.circuit_traces[13] = .{ .x1 = 900, .y1 = 50, .x2 = 900, .y2 = 550, .pulse_offset = 2.25, .is_horizontal = false };
         self.circuit_traces[14] = .{ .x1 = 800, .y1 = 100, .x2 = 950, .y2 = 200, .pulse_offset = 2.5, .is_horizontal = false };
         self.circuit_traces[15] = .{ .x1 = 950, .y1 = 350, .x2 = 1100, .y2 = 450, .pulse_offset = 2.75, .is_horizontal = false };
+
+        // Initialise decorative IC chips — spread across background, below HUD zone (y >= 150)
+        const chip_data = [config.BG_CHIP_COUNT]struct { x: i32, y: i32, w: i32, h: i32, pins: i32, phase: f32, label: u8 }{
+            .{ .x = 80, .y = 180, .w = 56, .h = 28, .pins = 4, .phase = 0.0, .label = 'U' },
+            .{ .x = 320, .y = 350, .w = 48, .h = 24, .pins = 3, .phase = 0.8, .label = 'A' },
+            .{ .x = 530, .y = 220, .w = 60, .h = 30, .pins = 5, .phase = 1.6, .label = 'Z' },
+            .{ .x = 700, .y = 420, .w = 50, .h = 26, .pins = 4, .phase = 2.4, .label = 'M' },
+            .{ .x = 900, .y = 170, .w = 52, .h = 28, .pins = 4, .phase = 3.2, .label = 'C' },
+            .{ .x = 1050, .y = 310, .w = 44, .h = 22, .pins = 3, .phase = 4.0, .label = 'R' },
+            .{ .x = 180, .y = 470, .w = 58, .h = 30, .pins = 5, .phase = 4.8, .label = 'D' },
+            .{ .x = 620, .y = 500, .w = 46, .h = 24, .pins = 3, .phase = 5.6, .label = 'X' },
+        };
+        for (chip_data, 0..) |cd, idx| {
+            self.chips[idx] = .{
+                .x = cd.x,
+                .y = cd.y,
+                .width = cd.w,
+                .height = cd.h,
+                .pins_per_side = cd.pins,
+                .phase = cd.phase,
+                .label_char = cd.label,
+            };
+        }
 
         return self;
     }
@@ -181,6 +217,71 @@ pub const Background = struct {
                     }
                 }
             }
+        }
+
+        // === Animated IC chips — mid-layer parallax (closer than traces) ===
+        const chip_parallax_x = camera_x * config.BG_CHIP_PARALLAX_FACTOR;
+        const chip_shift: i32 = @intFromFloat(@round(chip_parallax_x));
+
+        for (self.chips) |chip| {
+            const cx = chip.x - chip_shift;
+            const cy = chip.y;
+
+            // Skip if fully off-screen
+            if (cx + chip.width < 0 or cx > config.SCREEN_WIDTH) continue;
+
+            // --- Chip body (dark IC package) ---
+            const body_color = rl.Color{ .r = 35, .g = 35, .b = 40, .a = 180 };
+            rl.drawRectangle(cx, cy, chip.width, chip.height, body_color);
+
+            // --- Pin legs along top and bottom edges ---
+            const pin_color = rl.Color{ .r = 160, .g = 140, .b = 60, .a = 180 }; // gold pins
+            const pin_w: i32 = 4;
+            const pin_h: i32 = 3;
+            const usable_w = chip.width - 8; // inset from edges
+            const pin_spacing: i32 = if (chip.pins_per_side > 1)
+                @divTrunc(usable_w, chip.pins_per_side - 1)
+            else
+                0;
+
+            var p: i32 = 0;
+            while (p < chip.pins_per_side) : (p += 1) {
+                const px_off = 4 + p * pin_spacing;
+                // Top pins (extend upward)
+                rl.drawRectangle(cx + px_off, cy - pin_h, pin_w, pin_h, pin_color);
+                // Bottom pins (extend downward)
+                rl.drawRectangle(cx + px_off, cy + chip.height, pin_w, pin_h, pin_color);
+            }
+
+            // --- Orientation notch (semicircle indent on left edge) ---
+            const notch_y = cy + @divTrunc(chip.height, 2);
+            rl.drawCircle(cx, notch_y, 3, rl.Color{ .r = 50, .g = 50, .b = 55, .a = 180 });
+
+            // --- Label text (single char stamped on body) ---
+            const label_buf = [2]u8{ chip.label_char, 0 };
+            const label_x = cx + @divTrunc(chip.width, 2) - 4;
+            const label_y = cy + @divTrunc(chip.height, 2) - 5;
+            rl.drawText(@ptrCast(&label_buf), label_x, label_y, 10, rl.Color{ .r = 120, .g = 120, .b = 130, .a = 150 });
+
+            // --- Activity LED (blinking green/red dot, top-right corner) ---
+            const led_pulse = @sin(self.time * 3.5 + chip.phase);
+            const led_on = led_pulse > 0.0;
+            const led_color = if (led_on)
+                rl.Color{ .r = 50, .g = 220, .b = 80, .a = 200 } // green ON
+            else
+                rl.Color{ .r = 60, .g = 40, .b = 40, .a = 140 }; // dim OFF
+            const led_x = cx + chip.width - 7;
+            const led_y = cy + 5;
+            rl.drawCircle(led_x, led_y, 2, led_color);
+
+            // Glow halo when LED is on
+            if (led_on) {
+                const glow_a: u8 = @intFromFloat(60.0 + led_pulse * 40.0);
+                rl.drawCircle(led_x, led_y, 5, rl.Color{ .r = 50, .g = 220, .b = 80, .a = glow_a });
+            }
+
+            // --- Subtle border highlight ---
+            rl.drawRectangleLines(cx, cy, chip.width, chip.height, rl.Color{ .r = 60, .g = 60, .b = 70, .a = 120 });
         }
 
         // Draw particles (electrical sparks/data, parallax-shifted)

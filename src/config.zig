@@ -56,6 +56,8 @@ pub const HUD_COLOR = rl.Color{ .r = 0, .g = 255, .b = 128, .a = 255 }; // Green
 
 // Background parallax
 pub const BG_PARALLAX_FACTOR: f32 = 0.15; // Far background scrolls at 15% of camera speed
+pub const BG_CHIP_PARALLAX_FACTOR: f32 = 0.25; // Mid-layer IC chips scroll at 25% (closer than traces)
+pub const BG_CHIP_COUNT: usize = 8; // Number of decorative IC chips in background
 
 // Level dimensions — compile-time maximums for array sizing
 pub const MAX_LEVEL_WIDTH: i32 = 200; // Max tiles wide (3200 px)

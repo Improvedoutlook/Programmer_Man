@@ -77,6 +77,7 @@ pub const Game = struct {
     state: GameState,
     current_level: u8,
     music: ?audio.ChiptunePlayer,
+    victory_music: ?audio.VictoryMusic,
     all_bugs_defeated: bool,
     terminal_pos: ?struct { x: i32, y: i32 },
 
@@ -93,6 +94,8 @@ pub const Game = struct {
             m.play();
         }
 
+        const victory_music_player: ?audio.VictoryMusic = audio.VictoryMusic.init() catch null;
+
         return Self{
             .player = Player.init(),
             .tilemap = Tilemap.initDefault(),
@@ -102,6 +105,7 @@ pub const Game = struct {
             .state = .playing,
             .current_level = 0,
             .music = music_player,
+            .victory_music = victory_music_player,
             .all_bugs_defeated = false,
             .terminal_pos = null,
         };
@@ -110,6 +114,9 @@ pub const Game = struct {
     pub fn deinit(self: *Self) void {
         if (self.music) |*music| {
             music.deinit();
+        }
+        if (self.victory_music) |*victory_music| {
+            victory_music.deinit();
         }
         audio.unloadSfx();
     }
@@ -222,6 +229,11 @@ pub const Game = struct {
             music.update(dt);
         }
 
+        // Update victory music stream
+        if (self.victory_music) |*victory_music| {
+            victory_music.update();
+        }
+
         switch (self.state) {
             .playing => self.updatePlaying(dt),
             .paused => self.updatePaused(),
@@ -292,11 +304,13 @@ pub const Game = struct {
                 const enter_pressed = rl.isKeyPressed(.enter) or rl.isKeyPressed(.kp_enter) or rl.isKeyPressed(.e);
 
                 if (overlaps and enter_pressed) {
-                    // STOP MUSIC AND PLAY VICTORY SOUND
+                    // STOP BACKGROUND MUSIC AND PLAY VICTORY MUSIC
                     if (self.music) |*music| {
                         music.stop();
                     }
-                    audio.playSfx(.Victory, config.SFX_VOLUME);
+                    if (self.victory_music) |*victory_music| {
+                        victory_music.play();
+                    }
 
                     self.state = .victory;
                 }
@@ -322,7 +336,9 @@ pub const Game = struct {
 
     fn updateVictory(self: *Self) void {
         if (rl.isKeyPressed(.r)) {
-            // Restart music when restarting level
+            if (self.victory_music) |*victory_music| {
+                victory_music.stop();
+            }
             if (self.music) |*music| {
                 music.play();
             }

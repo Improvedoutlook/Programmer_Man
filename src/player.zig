@@ -310,8 +310,7 @@ pub const Player = struct {
 
         if (self.health <= 0) {
             // Out of health, lose a life
-            // For development: infinite lives (comment out when ready)
-            // self.lives -= 1;
+            self.lives -= 1;
 
             if (self.lives > 0) {
                 self.respawn();

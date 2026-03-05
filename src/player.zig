@@ -6,6 +6,37 @@ const config = @import("config.zig");
 const Tilemap = @import("tilemap.zig").Tilemap;
 const audio = @import("audio.zig");
 
+const FRAME_W: f32 = 83.0; // 500px sheet / 6 columns
+const FRAME_H: f32 = 100.0; // content height per frame row
+
+// Per-row Y origins in the sprite sheet.
+// The sheet has text labels ("FACING RIGHT/LEFT") between rows 0 and 1,
+// so we use explicit offsets to skip that band cleanly.
+const ROW_Y = [4]f32{ 15.0, 143.0, 260.0, 383.0 };
+
+fn getSpriteRect(state: PlayerState, anim_frame: u8) rl.Rectangle {
+    // Map animation index to actual sprite-sheet column.
+    // Running frames 0-3 map to sheet columns 2-5 (the side-profile frames).
+    const col: f32 = @floatFromInt(switch (state) {
+        .running => anim_frame + 2,
+        else => anim_frame,
+    });
+    const row: u8 = switch (state) {
+        .idle => 0,
+        .running => 3, // side-profile run row
+        .jumping => 1,
+        .falling => 1,
+        .stomping => 1,
+        .dead => 0,
+    };
+    return rl.Rectangle{
+        .x = col * FRAME_W,
+        .y = ROW_Y[row],
+        .width = FRAME_W,
+        .height = FRAME_H,
+    };
+}
+
 pub const PlayerState = enum {
     idle,
     running,
@@ -242,9 +273,21 @@ pub const Player = struct {
             else => 0.2,
         };
 
+        // How many frames does this animation have?
+        const frame_count: u32 = switch (self.state) {
+            .running => 4, // side-profile frames (cols 2-5, remapped in getSpriteRect)
+            else => 1, // idle/jump/fall: single static frame
+        };
+
+        // Clamp frame index after a state change (e.g. running→idle)
+        if (self.anim_frame >= frame_count) {
+            self.anim_frame = 0;
+            self.anim_timer = 0;
+        }
+
         if (self.anim_timer >= frame_duration) {
             self.anim_timer = 0;
-            self.anim_frame = @as(u8, @intCast((@as(u32, self.anim_frame) + 1) % 3));
+            self.anim_frame = @intCast((@as(u32, self.anim_frame) + 1) % frame_count);
         }
     }
 
@@ -297,7 +340,7 @@ pub const Player = struct {
         };
     }
 
-    pub fn render(self: *const Self) void {
+    pub fn render(self: *const Self, texture: rl.Texture2D) void {
         // Blinking effect when invincible
         if (self.invincible_timer > 0) {
             const blink: i32 = @as(i32, @intFromFloat(self.invincible_timer * 10)) & 1;
@@ -305,68 +348,21 @@ pub const Player = struct {
         }
 
         const rect = self.getRect();
-        const center_x: i32 = @intFromFloat(rect.x + config.PLAYER_WIDTH / 2);
-        const bottom_y: i32 = @intFromFloat(rect.y + config.PLAYER_HEIGHT);
+        var src = getSpriteRect(self.state, self.anim_frame);
 
-        // Body colors
-        const suit_color = config.PLAYER_COLOR;
-        const skin_color = rl.Color{ .r = 255, .g = 220, .b = 177, .a = 255 };
-        const dark_blue = rl.Color{ .r = 50, .g = 90, .b = 130, .a = 255 };
+        // Negative width flips the sprite horizontally — standard Raylib technique
+        if (!self.facing_right) {
+            src.width = -src.width;
+        }
 
-        // Direction multiplier for flipping
-        const dir: i32 = if (self.facing_right) 1 else -1;
-
-        // LEGS - side view with walking animation
-        const leg_y: i32 = bottom_y - 10;
-        const leg_offset: i32 = if (self.state == .running)
-            @as(i32, @intCast(self.anim_frame)) * 2 - 2 // -2, 0, 2 cycle
-        else
-            0;
-
-        // Back leg (thinner, slightly behind)
-        rl.drawRectangle(center_x - dir * 2 - leg_offset, leg_y, 2, 10, suit_color);
-        // Front leg (slightly forward)
-        rl.drawRectangle(center_x + dir * 1 + leg_offset, leg_y, 3, 10, suit_color);
-
-        // TORSO - side profile (narrower, offset to show depth)
-        const torso_y: i32 = bottom_y - 18;
-        rl.drawRectangle(center_x - 3, torso_y, 8, 8, suit_color);
-
-        // Belt line
-        rl.drawRectangle(center_x - 3, torso_y + 6, 8, 2, rl.Color.yellow);
-
-        // Chest emblem - "P" (positioned on visible side)
-        const emblem_x: i32 = center_x + dir * 1;
-        rl.drawRectangle(emblem_x - 1, torso_y + 2, 3, 4, rl.Color.white);
-        rl.drawPixel(emblem_x, torso_y + 2, suit_color); // Top of P
-        rl.drawPixel(emblem_x + dir, torso_y + 4, suit_color); // Gap in P
-
-        // ARMS - side view
-        const arm_swing: i32 = if (self.state == .running)
-            @as(i32, @intCast(self.anim_frame)) * 2 - 2
-        else
-            0;
-
-        // Back arm (behind body, higher when running)
-        rl.drawRectangle(center_x - dir * 4, torso_y + 2 - arm_swing, 2, 6, suit_color);
-        // Front arm (in front, lower when running)
-        rl.drawRectangle(center_x + dir * 4, torso_y + 2 + arm_swing, 3, 6, suit_color);
-
-        // HEAD - side profile
-        const head_y: i32 = torso_y - 6;
-        const head_x: i32 = center_x + dir * 1; // Offset to show facing direction
-        rl.drawRectangle(head_x - 2, head_y, 5, 6, skin_color);
-
-        // MASK - side profile across eyes
-        rl.drawRectangle(head_x - 2, head_y + 2, 5, 2, dark_blue);
-
-        // EYE - single eye visible from side
-        const eye_x: i32 = head_x + dir * 2;
-        rl.drawPixel(eye_x, head_y + 3, rl.Color.white);
-
-        // HAIR - side profile with slight point forward
-        rl.drawRectangle(head_x - 2, head_y, 5, 2, rl.Color{ .r = 80, .g = 60, .b = 40, .a = 255 });
-        rl.drawPixel(head_x + dir * 3, head_y, rl.Color{ .r = 80, .g = 60, .b = 40, .a = 255 }); // Hair spike
+        rl.drawTexturePro(
+            texture,
+            src, // which part of the sheet to draw
+            rect, // where on screen to draw it
+            .{ .x = 0, .y = 0 }, // origin point (top-left, no rotation)
+            0.0, // rotation
+            rl.Color.white, // white tint = draw texture as-is
+        );
     }
 
     pub fn renderHUD(self: *const Self) void {

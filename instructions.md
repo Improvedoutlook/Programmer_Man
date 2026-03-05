@@ -13,7 +13,7 @@ Project goals
 Technologies
 -	Zig — language used for the project.
 -	Raylib — rendering/audio/input library (bindings used in code).
--	Build: `zig build` and provided scripts in the repo root.
+-	Build: `.\dev.ps1` and provided scripts in the repo root.
 
 Core principles (apply consistently)
 -	DRY: centralize repeated logic and constants (use `src/config.zig`).

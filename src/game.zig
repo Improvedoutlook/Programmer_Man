@@ -80,6 +80,7 @@ pub const Game = struct {
     victory_music: ?audio.VictoryMusic,
     all_bugs_defeated: bool,
     terminal_pos: ?struct { x: i32, y: i32 },
+    player_texture: ?rl.Texture2D,
 
     const Self = @This();
 
@@ -95,6 +96,7 @@ pub const Game = struct {
         }
 
         const victory_music_player: ?audio.VictoryMusic = audio.VictoryMusic.init() catch null;
+        const player_texture = rl.loadTexture("assets/sprites/player.png") catch null;
 
         return Self{
             .player = Player.init(),
@@ -108,6 +110,7 @@ pub const Game = struct {
             .victory_music = victory_music_player,
             .all_bugs_defeated = false,
             .terminal_pos = null,
+            .player_texture = player_texture,
         };
     }
 
@@ -119,6 +122,10 @@ pub const Game = struct {
             victory_music.deinit();
         }
         audio.unloadSfx();
+
+        if (self.player_texture) |tex| {
+            rl.unloadTexture(tex);
+        }
     }
 
     /// Camera's world-space X offset (pixels from left edge of level).
@@ -367,7 +374,13 @@ pub const Game = struct {
             self.bugs.render();
 
             // Render player
-            self.player.render();
+            // Render player
+            if (self.player_texture) |tex| {
+                self.player.render(tex);
+            } else {
+                const rect = self.player.getRect();
+                rl.drawRectangleRec(rect, config.PLAYER_COLOR);
+            }
         }
         self.camera.rl_camera.end();
 

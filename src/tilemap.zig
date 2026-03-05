@@ -350,7 +350,7 @@ pub fn loadLevel1FromJson(tilemap: *Tilemap) !LevelData {
             const offset = @divTrunc(plat_width * (2 * si + 1), 2 * num_points);
             result.spark_spawns[result.spark_count] = .{
                 .tile_x = p.x1 + offset,
-                .tile_y = p.y - 1,
+                .tile_y = p.y + 1, // spawn at or just below platform
             };
             result.spark_count += 1;
         }

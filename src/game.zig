@@ -225,9 +225,10 @@ pub const Game = struct {
     /// Fallback: register hardcoded spark spawn points for Level 1.
     fn spawnSparksLevel1(self: *Self) void {
         const ts: f32 = @floatFromInt(config.TILE_SIZE);
-        self.sparks.addSpawnPoint(20.0 * ts, 27.0 * ts); // Platform 2
-        self.sparks.addSpawnPoint(34.0 * ts, 23.0 * ts); // Platform 3
-        self.sparks.addSpawnPoint(44.0 * ts, 17.0 * ts); // Platform 5
+        const spark_offset: f32 = 1.5 * ts; // 1.5 tiles below platform
+        self.sparks.addSpawnPoint(20.0 * ts, (27.0 * ts) + spark_offset); // Platform 2
+        self.sparks.addSpawnPoint(34.0 * ts, (23.0 * ts) + spark_offset); // Platform 3
+        self.sparks.addSpawnPoint(44.0 * ts, (17.0 * ts) + spark_offset); // Platform 5
     }
 
     pub fn update(self: *Self, dt: f32) void {

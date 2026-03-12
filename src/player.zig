@@ -15,18 +15,14 @@ const FRAME_H: f32 = 100.0; // content height per frame row
 const ROW_Y = [4]f32{ 15.0, 143.0, 260.0, 383.0 };
 
 fn getSpriteRect(state: PlayerState, anim_frame: u8) rl.Rectangle {
-    // Map animation index to actual sprite-sheet column.
-    // Running frames 0-3 map to sheet columns 2-5 (the side-profile frames).
     const col: f32 = @floatFromInt(switch (state) {
         .running => anim_frame + 2,
+        .jumping, .falling, .stomping => 4, // column 4 = mid-stride airborne pose
         else => anim_frame,
     });
     const row: u8 = switch (state) {
         .idle => 0,
-        .running => 3, // side-profile run row
-        .jumping => 1,
-        .falling => 1,
-        .stomping => 1,
+        .running, .jumping, .falling, .stomping => 3, // all use side-profile row
         .dead => 0,
     };
     return rl.Rectangle{

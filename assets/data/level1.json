@@ -30,9 +30,8 @@
         { "x1": 38, "x2": 41, "y": 21, "tile_type": "solid" },
 
         { "x1": 52, "x2": 60, "y": 32, "tile_type": "solid" },
-        { "x1": 60, "x2": 64, "y": 30, "tile_type": "solid" },
         { "x1": 63, "x2": 71, "y": 28, "tile_type": "chip" },
-        { "x1": 71, "x2": 76, "y": 26, "tile_type": "solid" },
+        
         { "x1": 75, "x2": 83, "y": 24, "tile_type": "solid", "sparks": true },
         { "x1": 83, "x2": 86, "y": 22, "tile_type": "solid" },
         { "x1": 85, "x2": 92, "y": 20, "tile_type": "capacitor", "sparks": true },
@@ -56,5 +55,9 @@
         { "x": 79, "y": 23, "facing": "left" },
         { "x": 88, "y": 19, "facing": "right" },
         { "x": 96, "y": 15, "facing": "left" }
-    ]
+        ,
+            { "x": 63, "y": 34, "facing": "left" }
+            ,{ "x": 82, "y": 34, "facing": "left" }
+            ,{ "x": 95, "y": 34, "facing": "left" }
+        ]
 }

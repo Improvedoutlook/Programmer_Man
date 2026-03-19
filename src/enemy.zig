@@ -17,6 +17,7 @@ pub const Bug = struct {
     x: f32,
     y: f32,
     vx: f32,
+    walk_speed: f32,
     state: BugState,
     facing_right: bool,
     anim_frame: u8,
@@ -26,11 +27,12 @@ pub const Bug = struct {
 
     const Self = @This();
 
-    pub fn init(tile_x: i32, tile_y: i32, facing_right: bool) Self {
+    pub fn init(tile_x: i32, tile_y: i32, facing_right: bool, walk_speed: f32) Self {
         return Self{
             .x = @as(f32, @floatFromInt(tile_x * config.TILE_SIZE)) + config.BUG_WIDTH / 2,
             .y = @as(f32, @floatFromInt(tile_y * config.TILE_SIZE)) + config.BUG_HEIGHT,
-            .vx = if (facing_right) config.BUG_WALK_SPEED else -config.BUG_WALK_SPEED,
+            .vx = if (facing_right) walk_speed else -walk_speed,
+            .walk_speed = walk_speed,
             .state = .walking,
             .facing_right = facing_right,
             .anim_frame = 0,
@@ -189,10 +191,10 @@ pub const BugManager = struct {
         };
     }
 
-    pub fn spawn(self: *Self, tile_x: i32, tile_y: i32, facing_right: bool) void {
+    pub fn spawn(self: *Self, tile_x: i32, tile_y: i32, facing_right: bool, walk_speed: f32) void {
         if (self.count >= config.MAX_BUGS) return;
 
-        self.bugs[self.count] = Bug.init(tile_x, tile_y, facing_right);
+        self.bugs[self.count] = Bug.init(tile_x, tile_y, facing_right, walk_speed);
         self.count += 1;
     }
 

@@ -160,7 +160,8 @@ pub const Game = struct {
                     // Spawn bugs from loaded data
                     for (0..level_data.bug_count) |i| {
                         const bug = level_data.bug_spawns[i];
-                        self.bugs.spawn(bug.tile_x, bug.tile_y, bug.facing_right);
+                        const actual_speed = config.BUG_WALK_SPEED * bug.speed;
+                        self.bugs.spawn(bug.tile_x, bug.tile_y, bug.facing_right, actual_speed);
                     }
 
                     // Register spark spawn points from loaded data
@@ -204,22 +205,22 @@ pub const Game = struct {
     fn spawnBugsLevel1(self: *Self) void {
         // Spawn bugs at strategic locations
         // Bug on ground floor, left side
-        self.bugs.spawn(8, 34, true);
+        self.bugs.spawn(8, 34, true, config.BUG_WALK_SPEED);
 
         // Bug on ground floor, middle
-        self.bugs.spawn(22, 34, false);
+        self.bugs.spawn(22, 34, false, config.BUG_WALK_SPEED);
 
         // Bug on Platform 2
-        self.bugs.spawn(20, 27, true);
+        self.bugs.spawn(20, 27, true, config.BUG_WALK_SPEED);
 
         // Bug on Platform 3
-        self.bugs.spawn(34, 23, false);
+        self.bugs.spawn(34, 23, false, config.BUG_WALK_SPEED);
 
         // Bug on high platform
-        self.bugs.spawn(44, 17, true);
+        self.bugs.spawn(44, 17, true, config.BUG_WALK_SPEED);
 
         // NEW: Bug on bottom far-right platform
-        self.bugs.spawn(46, 34, false);
+        self.bugs.spawn(46, 34, false, config.BUG_WALK_SPEED);
     }
 
     /// Fallback: register hardcoded spark spawn points for Level 1.

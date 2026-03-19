@@ -231,6 +231,7 @@ const JsonBug = struct {
     x: i32,
     y: i32,
     facing: []const u8,
+    speed: f32 = 1.0,
 };
 const JsonLevelSchema = struct {
     name: []const u8,
@@ -251,6 +252,7 @@ pub const BugSpawn = struct {
     tile_x: i32,
     tile_y: i32,
     facing_right: bool,
+    speed: f32,
 };
 
 pub const SparkSpawn = struct {
@@ -333,6 +335,7 @@ pub fn loadLevel1FromJson(tilemap: *Tilemap) !LevelData {
             .tile_x = bug.x,
             .tile_y = bug.y,
             .facing_right = std.mem.eql(u8, bug.facing, "right"),
+            .speed = bug.speed,
         };
         result.bug_count += 1;
     }

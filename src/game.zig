@@ -78,6 +78,7 @@ pub const Game = struct {
     current_level: u8,
     music: ?audio.ChiptunePlayer,
     victory_music: ?audio.VictoryMusic,
+    game_over_music: ?audio.GameOverMusic,
     all_bugs_defeated: bool,
     terminal_pos: ?struct { x: i32, y: i32 },
     player_texture: ?rl.Texture2D,
@@ -98,6 +99,7 @@ pub const Game = struct {
         }
 
         const victory_music_player: ?audio.VictoryMusic = audio.VictoryMusic.init() catch null;
+        const game_over_music_player: ?audio.GameOverMusic = audio.GameOverMusic.init() catch null;
         const player_texture = rl.loadTexture("assets/sprites/player.png") catch null;
 
         return Self{
@@ -110,6 +112,7 @@ pub const Game = struct {
             .current_level = 0,
             .music = music_player,
             .victory_music = victory_music_player,
+            .game_over_music = game_over_music_player,
             .all_bugs_defeated = false,
             .terminal_pos = null,
             .player_texture = player_texture,
@@ -123,6 +126,9 @@ pub const Game = struct {
         }
         if (self.victory_music) |*victory_music| {
             victory_music.deinit();
+        }
+        if (self.game_over_music) |*game_over_music| {
+            game_over_music.deinit();
         }
         audio.unloadSfx();
 
@@ -276,6 +282,11 @@ pub const Game = struct {
             victory_music.update();
         }
 
+        // Update game over music stream
+        if (self.game_over_music) |*game_over_music| {
+            game_over_music.update();
+        }
+
         switch (self.state) {
             .playing => self.updatePlaying(dt),
             .paused => self.updatePaused(),
@@ -317,6 +328,13 @@ pub const Game = struct {
 
         // Check for player death (game over)
         if (self.player.state == .dead) {
+            // Stop background music and play game over track
+            if (self.music) |*music| {
+                music.stop();
+            }
+            if (self.game_over_music) |*game_over_music| {
+                game_over_music.play();
+            }
             self.state = .game_over;
         }
 
@@ -370,6 +388,10 @@ pub const Game = struct {
 
     fn updateGameOver(self: *Self) void {
         if (rl.isKeyPressed(.r)) {
+            // Stop game over music before restarting
+            if (self.game_over_music) |*game_over_music| {
+                game_over_music.stop();
+            }
             // Full reset: go back to level 1 with fresh lives and score
             self.player.lives = config.INITIAL_LIVES;
             self.player.score = 0;

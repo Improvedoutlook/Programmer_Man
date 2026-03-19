@@ -186,6 +186,15 @@ pub const Game = struct {
             },
         }
 
+        // Switch background music based on level
+        if (self.music) |*music| {
+            switch (level) {
+                0 => music.switchTrack("assets/music/lost_in_hyperspace.mp3"),
+                1 => music.switchTrack("assets/music/danger_streets.mp3"),
+                else => music.switchTrack("assets/music/lost_in_hyperspace.mp3"),
+            }
+        }
+
         // Reset player and position at the level's spawn point
         self.player = Player.init();
         self.player.x = @as(f32, @floatFromInt(spawn_x * config.TILE_SIZE)) + config.PLAYER_WIDTH / 2;
@@ -351,10 +360,7 @@ pub const Game = struct {
 
     fn updateGameOver(self: *Self) void {
         if (rl.isKeyPressed(.r)) {
-            // Restart music when restarting level
-            if (self.music) |*music| {
-                music.play();
-            }
+            // loadLevel now handles music switching, no need to play() here
             self.loadLevel(self.current_level);
         }
     }
@@ -364,9 +370,7 @@ pub const Game = struct {
             if (self.victory_music) |*victory_music| {
                 victory_music.stop();
             }
-            if (self.music) |*music| {
-                music.play();
-            }
+            // loadLevel now handles music switching, no need to play() here
             self.loadLevel(self.current_level);
         }
     }

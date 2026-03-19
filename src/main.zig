@@ -50,7 +50,12 @@ pub fn main() !void {
 
     // Main game loop
     while (!rl.windowShouldClose()) {
-        const dt = rl.getFrameTime();
+        // Clamp dt to prevent physics explosion when the OS blocks the
+        // event loop (e.g. window resize on Windows).  Without this the
+        // player accumulates huge velocity in a single frame and falls
+        // through the world, losing a life.
+        const raw_dt = rl.getFrameTime();
+        const dt = if (raw_dt > 0.1) @as(f32, 0.0) else raw_dt;
 
         // === UPDATE (all game logic at fixed 800x600 resolution) ===
         game.update(dt);

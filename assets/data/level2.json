@@ -4,7 +4,7 @@
     "width": 110,
     "height": 37,
     "spawn": { "x": 3, "y": 35 },
-    "terminal": { "x": 107, "y": 11 },
+    "terminal": { "x": 107, "y": 9 },
     "ground": {
         "y": 35,
         "segments": [

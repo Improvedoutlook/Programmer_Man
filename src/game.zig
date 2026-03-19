@@ -370,8 +370,10 @@ pub const Game = struct {
 
     fn updateGameOver(self: *Self) void {
         if (rl.isKeyPressed(.r)) {
-            // loadLevel now handles music switching, no need to play() here
-            self.loadLevel(self.current_level);
+            // Full reset: go back to level 1 with fresh lives and score
+            self.player.lives = config.INITIAL_LIVES;
+            self.player.score = 0;
+            self.loadLevel(0);
         }
     }
 

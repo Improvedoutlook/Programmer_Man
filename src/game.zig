@@ -81,8 +81,10 @@ pub const Game = struct {
     all_bugs_defeated: bool,
     terminal_pos: ?struct { x: i32, y: i32 },
     player_texture: ?rl.Texture2D,
+    game_complete: bool,
 
     const Self = @This();
+    const MAX_LEVELS: u8 = 2; // Total number of levels (Level 1 = index 0, Level 2 = index 1)
 
     pub fn init() Self {
         // Audio device is initialized in main.zig
@@ -111,6 +113,7 @@ pub const Game = struct {
             .all_bugs_defeated = false,
             .terminal_pos = null,
             .player_texture = player_texture,
+            .game_complete = false,
         };
     }
 
@@ -196,7 +199,12 @@ pub const Game = struct {
         }
 
         // Reset player and position at the level's spawn point
+        // Preserve score and lives across level transitions
+        const saved_score = self.player.score;
+        const saved_lives = self.player.lives;
         self.player = Player.init();
+        self.player.score = saved_score;
+        self.player.lives = saved_lives;
         self.player.x = @as(f32, @floatFromInt(spawn_x * config.TILE_SIZE)) + config.PLAYER_WIDTH / 2;
         self.player.y = @as(f32, @floatFromInt(spawn_y * config.TILE_SIZE));
         self.state = .playing;
@@ -346,6 +354,8 @@ pub const Game = struct {
                         victory_music.play();
                     }
 
+                    // Determine if this is the final level
+                    self.game_complete = (self.current_level >= Self.MAX_LEVELS - 1);
                     self.state = .victory;
                 }
             }
@@ -366,12 +376,28 @@ pub const Game = struct {
     }
 
     fn updateVictory(self: *Self) void {
-        if (rl.isKeyPressed(.r)) {
-            if (self.victory_music) |*victory_music| {
-                victory_music.stop();
+        if (self.game_complete) {
+            // Final victory — press R to restart from Level 1 with fresh stats
+            if (rl.isKeyPressed(.r)) {
+                if (self.victory_music) |*victory_music| {
+                    victory_music.stop();
+                }
+                self.game_complete = false;
+                // Reset score and lives for a fresh start
+                self.player.score = 0;
+                self.player.lives = config.INITIAL_LIVES;
+                self.loadLevel(0);
             }
-            // loadLevel now handles music switching, no need to play() here
-            self.loadLevel(self.current_level);
+        } else {
+            // Level complete — press Enter to advance to next level
+            if (rl.isKeyPressed(.enter) or rl.isKeyPressed(.kp_enter) or rl.isKeyPressed(.e)) {
+                if (self.victory_music) |*victory_music| {
+                    victory_music.stop();
+                }
+                if (self.current_level + 1 < Self.MAX_LEVELS) {
+                    self.loadLevel(self.current_level + 1);
+                }
+            }
         }
     }
 
@@ -443,18 +469,34 @@ pub const Game = struct {
         overlay_color.a = 150;
         rl.drawRectangle(0, 0, config.SCREEN_WIDTH, config.SCREEN_HEIGHT, overlay_color);
 
-        // Victory text
         var green = rl.Color.green;
         green.a = 255;
-        rl.drawText("You win!", config.SCREEN_WIDTH / 2 - 80, config.SCREEN_HEIGHT / 2 - 60, 40, green);
-        rl.drawText("Pull request successfully submitted!", config.SCREEN_WIDTH / 2 - 180, config.SCREEN_HEIGHT / 2 - 15, 24, green);
 
-        // Score display
-        var score_buf: [64]u8 = undefined;
-        const score_text = std.fmt.bufPrintZ(&score_buf, "Final Score: {d}", .{self.player.score}) catch "Final Score: ???";
-        rl.drawText(score_text, config.SCREEN_WIDTH / 2 - 80, config.SCREEN_HEIGHT / 2 + 25, 24, config.HUD_COLOR);
+        if (self.game_complete) {
+            // Final victory — all levels beaten
+            rl.drawText("You beat the game!", config.SCREEN_WIDTH / 2 - 160, config.SCREEN_HEIGHT / 2 - 60, 40, green);
+            rl.drawText("All PRs merged successfully!", config.SCREEN_WIDTH / 2 - 160, config.SCREEN_HEIGHT / 2 - 15, 24, green);
 
-        rl.drawText("Press R to Restart", config.SCREEN_WIDTH / 2 - 90, config.SCREEN_HEIGHT / 2 + 65, 20, config.HUD_COLOR);
+            // Final score display
+            var score_buf: [64]u8 = undefined;
+            const score_text = std.fmt.bufPrintZ(&score_buf, "Final Score: {d}", .{self.player.score}) catch "Final Score: ???";
+            rl.drawText(score_text, config.SCREEN_WIDTH / 2 - 80, config.SCREEN_HEIGHT / 2 + 25, 24, config.HUD_COLOR);
+
+            rl.drawText("Press R to Restart", config.SCREEN_WIDTH / 2 - 90, config.SCREEN_HEIGHT / 2 + 65, 20, config.HUD_COLOR);
+        } else {
+            // Level complete — more levels ahead
+            // Show which level was completed (current_level is 0-indexed, display as 1-indexed)
+            var level_buf: [64]u8 = undefined;
+            const level_text = std.fmt.bufPrintZ(&level_buf, "PR Submitted - Level {d} Complete!", .{self.current_level + 1}) catch "PR Submitted - Level Complete!";
+            rl.drawText(level_text, config.SCREEN_WIDTH / 2 - 180, config.SCREEN_HEIGHT / 2 - 60, 32, green);
+
+            // Score display
+            var score_buf: [64]u8 = undefined;
+            const score_text = std.fmt.bufPrintZ(&score_buf, "Score: {d}", .{self.player.score}) catch "Score: ???";
+            rl.drawText(score_text, config.SCREEN_WIDTH / 2 - 60, config.SCREEN_HEIGHT / 2 - 10, 24, config.HUD_COLOR);
+
+            rl.drawText("Press Enter to continue", config.SCREEN_WIDTH / 2 - 120, config.SCREEN_HEIGHT / 2 + 30, 20, config.HUD_COLOR);
+        }
     }
 
     fn renderTerminal(self: *Self) void {

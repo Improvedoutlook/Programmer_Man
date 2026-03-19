@@ -154,6 +154,30 @@ pub const ChiptunePlayer = struct {
         }
     }
 
+    /// Switch to a different music track at runtime.
+    /// Stops and unloads the current stream, then loads and plays the new one.
+    /// If loading fails, the player is left in a stopped state with the old
+    /// stream already unloaded — callers should handle a subsequent play()
+    /// gracefully (the update() loop already checks is_playing).
+    pub fn switchTrack(self: *Self, path: [:0]const u8) void {
+        // Stop current playback
+        self.stop();
+
+        // Unload the old stream
+        rl.unloadMusicStream(self.music);
+
+        // Load the new stream
+        if (rl.loadMusicStream(path)) |new_music| {
+            self.music = new_music;
+            self.play();
+        } else |_| {
+            // Loading failed — mark as not playing.
+            // music field is now invalid, but we won't touch it until
+            // a successful switchTrack or deinit replaces it.
+            self.is_playing = false;
+        }
+    }
+
     fn generateChiptuneWave() rl.Wave {
         const sample_rate: u32 = 22050;
         const duration: f32 = 8.0; // Longer loop for better melody

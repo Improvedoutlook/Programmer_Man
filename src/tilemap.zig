@@ -279,11 +279,11 @@ fn jsonTileType(name: []const u8) TileType {
     return .solid;
 }
 
-/// Load Level 1 from the JSON data file at runtime.
+/// Load any level from a JSON data file at runtime.
 /// Populates the tilemap and returns spawn / config metadata.
-pub fn loadLevel1FromJson(tilemap: *Tilemap) !LevelData {
+pub fn loadLevelFromJson(tilemap: *Tilemap, path: []const u8) !LevelData {
     // Read JSON file from disk (relative to CWD / project root)
-    const file = try std.fs.cwd().openFile("assets/data/level1.json", .{});
+    const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
     const json_bytes = try file.readToEndAlloc(std.heap.page_allocator, 128 * 1024);
     defer std.heap.page_allocator.free(json_bytes);
@@ -360,6 +360,11 @@ pub fn loadLevel1FromJson(tilemap: *Tilemap) !LevelData {
     }
 
     return result;
+}
+
+/// Load Level 1 from the JSON data file at runtime (backward-compatible wrapper).
+pub fn loadLevel1FromJson(tilemap: *Tilemap) !LevelData {
+    return loadLevelFromJson(tilemap, "assets/data/level1.json");
 }
 
 // ---------------------------------------------------------------------------

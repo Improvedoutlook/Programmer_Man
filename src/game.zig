@@ -157,28 +157,7 @@ pub const Game = struct {
         switch (level) {
             0 => {
                 if (tilemap_builder.loadLevel1FromJson(&self.tilemap)) |level_data| {
-                    // Spawn bugs from loaded data
-                    for (0..level_data.bug_count) |i| {
-                        const bug = level_data.bug_spawns[i];
-                        const actual_speed = config.BUG_WALK_SPEED * bug.speed;
-                        self.bugs.spawn(bug.tile_x, bug.tile_y, bug.facing_right, actual_speed);
-                    }
-
-                    // Register spark spawn points from loaded data
-                    for (0..level_data.spark_count) |i| {
-                        const sp = level_data.spark_spawns[i];
-                        self.sparks.addSpawnPoint(
-                            @as(f32, @floatFromInt(sp.tile_x * config.TILE_SIZE)),
-                            @as(f32, @floatFromInt(sp.tile_y * config.TILE_SIZE)),
-                        );
-                    }
-
-                    // Tell spark manager how tall the level is (for deactivation)
-                    self.sparks.level_pixel_height = self.tilemap.getLevelPixelHeight();
-
-                    self.terminal_pos = .{ .x = level_data.terminal_x, .y = level_data.terminal_y };
-                    spawn_x = level_data.player_spawn_x;
-                    spawn_y = level_data.player_spawn_y;
+                    self.applyLevelData(level_data, &spawn_x, &spawn_y);
                 } else |_| {
                     // Fallback to hardcoded level if JSON parsing fails
                     tilemap_builder.createLevel1(&self.tilemap);
@@ -187,7 +166,19 @@ pub const Game = struct {
                     self.terminal_pos = .{ .x = 6, .y = 28 };
                 }
             },
+            1 => {
+                if (tilemap_builder.loadLevelFromJson(&self.tilemap, "assets/data/level2.json")) |level_data| {
+                    self.applyLevelData(level_data, &spawn_x, &spawn_y);
+                } else |_| {
+                    // Fallback to hardcoded Level 1 if Level 2 JSON fails
+                    tilemap_builder.createLevel1(&self.tilemap);
+                    self.spawnBugsLevel1();
+                    self.spawnSparksLevel1();
+                    self.terminal_pos = .{ .x = 6, .y = 28 };
+                }
+            },
             else => {
+                // Default fallback for any unknown level index
                 tilemap_builder.createLevel1(&self.tilemap);
                 self.spawnBugsLevel1();
                 self.spawnSparksLevel1();
@@ -200,6 +191,31 @@ pub const Game = struct {
         self.player.x = @as(f32, @floatFromInt(spawn_x * config.TILE_SIZE)) + config.PLAYER_WIDTH / 2;
         self.player.y = @as(f32, @floatFromInt(spawn_y * config.TILE_SIZE));
         self.state = .playing;
+    }
+
+    fn applyLevelData(self: *Self, level_data: tilemap_builder.LevelData, spawn_x: *i32, spawn_y: *i32) void {
+        // Spawn bugs from loaded data
+        for (0..level_data.bug_count) |i| {
+            const bug = level_data.bug_spawns[i];
+            const actual_speed = config.BUG_WALK_SPEED * bug.speed;
+            self.bugs.spawn(bug.tile_x, bug.tile_y, bug.facing_right, actual_speed);
+        }
+
+        // Register spark spawn points from loaded data
+        for (0..level_data.spark_count) |i| {
+            const sp = level_data.spark_spawns[i];
+            self.sparks.addSpawnPoint(
+                @as(f32, @floatFromInt(sp.tile_x * config.TILE_SIZE)),
+                @as(f32, @floatFromInt(sp.tile_y * config.TILE_SIZE)),
+            );
+        }
+
+        // Tell spark manager how tall the level is (for deactivation)
+        self.sparks.level_pixel_height = self.tilemap.getLevelPixelHeight();
+
+        self.terminal_pos = .{ .x = level_data.terminal_x, .y = level_data.terminal_y };
+        spawn_x.* = level_data.player_spawn_x;
+        spawn_y.* = level_data.player_spawn_y;
     }
 
     fn spawnBugsLevel1(self: *Self) void {

@@ -7,6 +7,7 @@ const Player = @import("player.zig").Player;
 const Tilemap = @import("tilemap.zig").Tilemap;
 const tilemap_builder = @import("tilemap.zig");
 const BugManager = @import("enemy.zig").BugManager;
+const AiType = @import("tilemap.zig").AiType;
 const SparkManager = @import("hazards.zig").SparkManager;
 const audio = @import("audio.zig");
 
@@ -85,7 +86,7 @@ pub const Game = struct {
     game_complete: bool,
 
     const Self = @This();
-    const MAX_LEVELS: u8 = 2; // Total number of levels (Level 1 = index 0, Level 2 = index 1)
+    const MAX_LEVELS: u8 = 3; // Total number of levels (Level 1 = index 0, Level 2 = index 1, Level 3 = index 2)
 
     pub fn init() Self {
         // Audio device is initialized in main.zig
@@ -186,6 +187,17 @@ pub const Game = struct {
                     self.terminal_pos = .{ .x = 6, .y = 28 };
                 }
             },
+            2 => {
+                if (tilemap_builder.loadLevelFromJson(&self.tilemap, "assets/data/level3.json")) |level_data| {
+                    self.applyLevelData(level_data, &spawn_x, &spawn_y);
+                } else |_| {
+                    // Fallback to hardcoded Level 1 if Level 3 JSON fails
+                    tilemap_builder.createLevel1(&self.tilemap);
+                    self.spawnBugsLevel1();
+                    self.spawnSparksLevel1();
+                    self.terminal_pos = .{ .x = 6, .y = 28 };
+                }
+            },
             else => {
                 // Default fallback for any unknown level index
                 tilemap_builder.createLevel1(&self.tilemap);
@@ -200,6 +212,7 @@ pub const Game = struct {
             switch (level) {
                 0 => music.switchTrack("assets/music/lost_in_hyperspace.mp3"),
                 1 => music.switchTrack("assets/music/danger_streets.mp3"),
+                2 => music.switchTrack("assets/music/lone_fighter.mp3"),
                 else => music.switchTrack("assets/music/lost_in_hyperspace.mp3"),
             }
         }
@@ -221,7 +234,7 @@ pub const Game = struct {
         for (0..level_data.bug_count) |i| {
             const bug = level_data.bug_spawns[i];
             const actual_speed = config.BUG_WALK_SPEED * bug.speed;
-            self.bugs.spawn(bug.tile_x, bug.tile_y, bug.facing_right, actual_speed);
+            self.bugs.spawn(bug.tile_x, bug.tile_y, bug.facing_right, actual_speed, bug.ai);
         }
 
         // Register spark spawn points from loaded data
@@ -244,22 +257,22 @@ pub const Game = struct {
     fn spawnBugsLevel1(self: *Self) void {
         // Spawn bugs at strategic locations
         // Bug on ground floor, left side
-        self.bugs.spawn(8, 34, true, config.BUG_WALK_SPEED);
+        self.bugs.spawn(8, 34, true, config.BUG_WALK_SPEED, .walker);
 
         // Bug on ground floor, middle
-        self.bugs.spawn(22, 34, false, config.BUG_WALK_SPEED);
+        self.bugs.spawn(22, 34, false, config.BUG_WALK_SPEED, .walker);
 
         // Bug on Platform 2
-        self.bugs.spawn(20, 27, true, config.BUG_WALK_SPEED);
+        self.bugs.spawn(20, 27, true, config.BUG_WALK_SPEED, .walker);
 
         // Bug on Platform 3
-        self.bugs.spawn(34, 23, false, config.BUG_WALK_SPEED);
+        self.bugs.spawn(34, 23, false, config.BUG_WALK_SPEED, .walker);
 
         // Bug on high platform
-        self.bugs.spawn(44, 17, true, config.BUG_WALK_SPEED);
+        self.bugs.spawn(44, 17, true, config.BUG_WALK_SPEED, .walker);
 
         // NEW: Bug on bottom far-right platform
-        self.bugs.spawn(46, 34, false, config.BUG_WALK_SPEED);
+        self.bugs.spawn(46, 34, false, config.BUG_WALK_SPEED, .walker);
     }
 
     /// Fallback: register hardcoded spark spawn points for Level 1.

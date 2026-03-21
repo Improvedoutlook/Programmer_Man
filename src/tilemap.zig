@@ -232,6 +232,7 @@ const JsonBug = struct {
     y: i32,
     facing: []const u8,
     speed: f32 = 1.0,
+    ai: []const u8 = "walker",
 };
 const JsonLevelSchema = struct {
     name: []const u8,
@@ -248,11 +249,17 @@ const JsonLevelSchema = struct {
 
 pub const MAX_SPAWN_ENTRIES: usize = 32;
 
+pub const AiType = enum {
+    walker,
+    jumper,
+};
+
 pub const BugSpawn = struct {
     tile_x: i32,
     tile_y: i32,
     facing_right: bool,
     speed: f32,
+    ai: AiType = .walker,
 };
 
 pub const SparkSpawn = struct {
@@ -336,6 +343,7 @@ pub fn loadLevelFromJson(tilemap: *Tilemap, path: []const u8) !LevelData {
             .tile_y = bug.y,
             .facing_right = std.mem.eql(u8, bug.facing, "right"),
             .speed = bug.speed,
+            .ai = if (std.mem.eql(u8, bug.ai, "jumper")) .jumper else .walker,
         };
         result.bug_count += 1;
     }

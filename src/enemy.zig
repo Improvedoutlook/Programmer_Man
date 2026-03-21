@@ -4,6 +4,7 @@ const std = @import("std");
 const rl = @import("raylib");
 const config = @import("config.zig");
 const Tilemap = @import("tilemap.zig").Tilemap;
+const AiType = @import("tilemap.zig").AiType;
 const Player = @import("player.zig").Player;
 const audio = @import("audio.zig");
 
@@ -17,6 +18,7 @@ pub const Bug = struct {
     x: f32,
     y: f32,
     vx: f32,
+    vy: f32,
     walk_speed: f32,
     state: BugState,
     facing_right: bool,
@@ -24,14 +26,21 @@ pub const Bug = struct {
     anim_timer: f32,
     death_timer: f32,
     active: bool,
+    ai: AiType,
+    jump_timer: f32,
+    on_ground: bool,
 
     const Self = @This();
 
-    pub fn init(tile_x: i32, tile_y: i32, facing_right: bool, walk_speed: f32) Self {
+    pub fn init(tile_x: i32, tile_y: i32, facing_right: bool, walk_speed: f32, ai: AiType) Self {
+        // Seed jump_timer with a pseudo-random offset based on spawn position
+        const seed_val: f32 = @as(f32, @floatFromInt(@mod(tile_x * 7 + tile_y * 13, 100))) / 100.0;
+        const initial_jump_timer = config.JUMPER_INTERVAL_MIN + seed_val * (config.JUMPER_INTERVAL_MAX - config.JUMPER_INTERVAL_MIN);
         return Self{
             .x = @as(f32, @floatFromInt(tile_x * config.TILE_SIZE)) + config.BUG_WIDTH / 2,
             .y = @as(f32, @floatFromInt(tile_y * config.TILE_SIZE)) + config.BUG_HEIGHT,
             .vx = if (facing_right) walk_speed else -walk_speed,
+            .vy = 0,
             .walk_speed = walk_speed,
             .state = .walking,
             .facing_right = facing_right,
@@ -39,6 +48,9 @@ pub const Bug = struct {
             .anim_timer = 0,
             .death_timer = 0,
             .active = true,
+            .ai = ai,
+            .jump_timer = initial_jump_timer,
+            .on_ground = true,
         };
     }
 
@@ -55,8 +67,37 @@ pub const Bug = struct {
     }
 
     fn updateWalking(self: *Self, dt: f32, tilemap: *const Tilemap) void {
-        const new_x = self.x + self.vx * dt;
+        // Apply gravity
+        self.vy += config.PLAYER_GRAVITY * dt;
+        if (self.vy > config.PLAYER_MAX_FALL_SPEED) self.vy = config.PLAYER_MAX_FALL_SPEED;
+
+        // Vertical movement / ground check
+        const new_y = self.y + self.vy * dt;
         const half_width = config.BUG_WIDTH / 2;
+        const ground_hit = tilemap.checkCollision(
+            self.x - half_width,
+            new_y,
+            config.BUG_WIDTH,
+            2,
+        );
+        if (self.vy >= 0 and ground_hit) {
+            // Snap to top of tile
+            const tile_y: i32 = @intFromFloat(@floor(new_y / @as(f32, @floatFromInt(config.TILE_SIZE))));
+            self.y = @as(f32, @floatFromInt(tile_y * config.TILE_SIZE));
+            self.vy = 0;
+            self.on_ground = true;
+        } else {
+            self.y = new_y;
+            self.on_ground = false;
+        }
+
+        // Jumper AI: attempt an intermittent jump when on ground
+        if (self.ai == .jumper) {
+            self.attemptJump(dt);
+        }
+
+        // Horizontal movement
+        const new_x = self.x + self.vx * dt;
 
         // Check for wall collision at new position
         const hit_wall = tilemap.checkCollision(
@@ -71,7 +112,10 @@ pub const Bug = struct {
         const check_x = if (self.vx > 0) new_x + edge_check_dist else new_x - edge_check_dist;
         const has_ground_ahead = tilemap.checkCollision(check_x, self.y + 2, 2, 2);
 
-        if (hit_wall or !has_ground_ahead) {
+        // Only check edge if on ground (airborne jumpers should keep moving)
+        const should_turn = hit_wall or (self.on_ground and !has_ground_ahead);
+
+        if (should_turn) {
             // Turn around
             self.vx = -self.vx;
             self.facing_right = !self.facing_right;
@@ -89,6 +133,19 @@ pub const Bug = struct {
         }
     }
 
+    fn attemptJump(self: *Self, dt: f32) void {
+        self.jump_timer -= dt;
+        if (self.on_ground and self.jump_timer <= 0) {
+            self.vy = config.JUMPER_JUMP_VELOCITY;
+            self.on_ground = false;
+            // Reset timer using a simple deterministic pseudo-random based on position
+            const px: i32 = @intFromFloat(self.x);
+            const py: i32 = @intFromFloat(self.y);
+            const hash: f32 = @as(f32, @floatFromInt(@mod(px * 31 + py * 17, 100))) / 100.0;
+            self.jump_timer = config.JUMPER_INTERVAL_MIN + hash * (config.JUMPER_INTERVAL_MAX - config.JUMPER_INTERVAL_MIN);
+        }
+    }
+
     fn updateAnimation(self: *Self, dt: f32) void {
         self.anim_timer += dt;
         const frame_duration: f32 = if (self.state == .walking) 0.15 else 0.05;
@@ -103,6 +160,7 @@ pub const Bug = struct {
         self.state = .dying;
         self.death_timer = 0;
         self.vx = 0;
+        self.vy = 0;
         // Play stomp sound effect (bug squish)
         audio.playSfx(.Stomp, config.SFX_VOLUME);
     }
@@ -191,10 +249,10 @@ pub const BugManager = struct {
         };
     }
 
-    pub fn spawn(self: *Self, tile_x: i32, tile_y: i32, facing_right: bool, walk_speed: f32) void {
+    pub fn spawn(self: *Self, tile_x: i32, tile_y: i32, facing_right: bool, walk_speed: f32, ai: AiType) void {
         if (self.count >= config.MAX_BUGS) return;
 
-        self.bugs[self.count] = Bug.init(tile_x, tile_y, facing_right, walk_speed);
+        self.bugs[self.count] = Bug.init(tile_x, tile_y, facing_right, walk_speed, ai);
         self.count += 1;
     }
 

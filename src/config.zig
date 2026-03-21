@@ -72,6 +72,11 @@ pub const DEFAULT_LEVEL_HEIGHT: i32 = TILES_Y; // 37 tiles — same as screen
 pub const SPAWN_TILE_X = 3;
 pub const SPAWN_TILE_Y = 35; // Ground level tile - player will be placed on top of this
 
+// Jumper enemy AI
+pub const JUMPER_INTERVAL_MIN: f32 = 1.0; // seconds between jumps (minimum)
+pub const JUMPER_INTERVAL_MAX: f32 = 3.0; // seconds between jumps (maximum)
+pub const JUMPER_JUMP_VELOCITY: f32 = -250.0; // pixels/second (negative = upward)
+
 // Audio settings
 pub const MUSIC_VOLUME: f32 = 0.5;
 pub const SFX_VOLUME: f32 = 0.7;

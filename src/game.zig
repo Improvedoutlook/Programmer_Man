@@ -554,7 +554,7 @@ pub const Game = struct {
 
     fn renderTerminalHint(_: *Self) void {
         // Draw hint at top center of screen
-        const hint = "Bugs defeated! Go to terminal and press Enter";
+        const hint = "Bugs squashed! Go to terminal and press Enter";
         const hint_width = 360;
         const hint_x = config.SCREEN_WIDTH / 2 - hint_width / 2;
         const hint_y = 90;

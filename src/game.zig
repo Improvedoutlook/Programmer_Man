@@ -364,15 +364,11 @@ pub const Game = struct {
                 const term_w: f32 = 32.0;
                 const term_h: f32 = 48.0;
 
-                const px = self.player.x;
-                const py = self.player.y;
-                const pw = config.PLAYER_WIDTH;
-                const ph = config.PLAYER_HEIGHT;
-
-                const overlaps = px < term_x + term_w and
-                    px + pw > term_x and
-                    py < term_y + term_h and
-                    py + ph > term_y;
+                const player_rect = self.player.getRect();
+                const overlaps = player_rect.x < term_x + term_w and
+                    player_rect.x + player_rect.width > term_x and
+                    player_rect.y < term_y + term_h and
+                    player_rect.y + player_rect.height > term_y;
 
                 const enter_pressed = rl.isKeyPressed(.enter) or rl.isKeyPressed(.kp_enter) or rl.isKeyPressed(.e);
 

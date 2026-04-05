@@ -63,6 +63,15 @@ pub const Bug = struct {
             .dead => {},
         }
 
+        // Treat bugs that fall out of the level as defeated so they cannot soft-lock progression.
+        if (self.active and self.y > tilemap.getLevelPixelHeight() + @as(f32, @floatFromInt(config.TILE_SIZE * 2))) {
+            self.state = .dead;
+            self.active = false;
+            self.vx = 0;
+            self.vy = 0;
+            return;
+        }
+
         self.updateAnimation(dt);
     }
 
@@ -93,7 +102,7 @@ pub const Bug = struct {
 
         // Jumper AI: attempt an intermittent jump when on ground
         if (self.ai == .jumper) {
-            self.attemptJump(dt);
+            self.attemptJump(dt, tilemap);
         }
 
         // Horizontal movement
@@ -112,8 +121,13 @@ pub const Bug = struct {
         const check_x = if (self.vx > 0) new_x + edge_check_dist else new_x - edge_check_dist;
         const has_ground_ahead = tilemap.checkCollision(check_x, self.y + 2, 2, 2);
 
+        // Prevent walking off the level bounds
+        const level_pixel_w: f32 = tilemap.getLevelPixelWidth();
+        const would_leave_left = (new_x - half_width) < 0.0;
+        const would_leave_right = (new_x + half_width) > level_pixel_w;
+
         // Only check edge if on ground (airborne jumpers should keep moving)
-        const should_turn = hit_wall or (self.on_ground and !has_ground_ahead);
+        const should_turn = hit_wall or (self.on_ground and !has_ground_ahead) or would_leave_left or would_leave_right;
 
         if (should_turn) {
             // Turn around
@@ -133,11 +147,48 @@ pub const Bug = struct {
         }
     }
 
-    fn attemptJump(self: *Self, dt: f32) void {
+    fn attemptJump(self: *Self, dt: f32, tilemap: *const Tilemap) void {
         self.jump_timer -= dt;
         if (self.on_ground and self.jump_timer <= 0) {
+            // Predict landing X using a simple ballistic estimate and disallow jumps
+            // that would land outside the level or in a column with no solid tiles.
+            const g: f32 = config.PLAYER_GRAVITY;
+            const vy0: f32 = config.JUMPER_JUMP_VELOCITY; // negative (upwards)
+            const total_air_time: f32 = (-2.0 * vy0) / g; // approximate time in air
+            const predicted_x: f32 = self.x + self.vx * total_air_time;
+
+            const tile_x: i32 = @intFromFloat(@floor(predicted_x / @as(f32, @floatFromInt(config.TILE_SIZE))));
+
+            // If landing column is outside level bounds, abort jump and turn around
+            if (tile_x < 0 or tile_x >= tilemap.level_width) {
+                self.vx = -self.vx;
+                self.facing_right = !self.facing_right;
+                self.jump_timer = config.JUMPER_INTERVAL_MIN;
+                return;
+            }
+
+            // Check if there's any solid tile in the target column (so we don't jump into a void)
+            var has_solid: bool = false;
+            var yy: i32 = 0;
+            while (yy < tilemap.level_height) : (yy += 1) {
+                if (tilemap.isSolid(tile_x, yy)) {
+                    has_solid = true;
+                    break;
+                }
+            }
+
+            if (!has_solid) {
+                // No landing platform; abort jump and reverse direction to avoid falling off
+                self.vx = -self.vx;
+                self.facing_right = !self.facing_right;
+                self.jump_timer = config.JUMPER_INTERVAL_MIN;
+                return;
+            }
+
+            // Safe to jump
             self.vy = config.JUMPER_JUMP_VELOCITY;
             self.on_ground = false;
+
             // Reset timer using a simple deterministic pseudo-random based on position
             const px: i32 = @intFromFloat(self.x);
             const py: i32 = @intFromFloat(self.y);

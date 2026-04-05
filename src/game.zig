@@ -521,12 +521,17 @@ pub const Game = struct {
             // Show which level was completed (current_level is 0-indexed, display as 1-indexed)
             var level_buf: [64]u8 = undefined;
             const level_text = std.fmt.bufPrintZ(&level_buf, "PR Submitted - Level {d} Complete!", .{self.current_level + 1}) catch "PR Submitted - Level Complete!";
-            rl.drawText(level_text, config.SCREEN_WIDTH / 2 - 180, config.SCREEN_HEIGHT / 2 - 60, 32, green);
+            // Measure and center the level text to ensure proper alignment on any screen size
+            const level_text_width: i32 = rl.measureText(level_text, 32);
+            const level_x: i32 = @divTrunc(config.SCREEN_WIDTH - level_text_width, 2);
+            rl.drawText(level_text, level_x, config.SCREEN_HEIGHT / 2 - 60, 32, green);
 
             // Score display
             var score_buf: [64]u8 = undefined;
             const score_text = std.fmt.bufPrintZ(&score_buf, "Score: {d}", .{self.player.score}) catch "Score: ???";
-            rl.drawText(score_text, config.SCREEN_WIDTH / 2 - 60, config.SCREEN_HEIGHT / 2 - 10, 24, config.HUD_COLOR);
+            const score_text_width: i32 = rl.measureText(score_text, 24);
+            const score_x: i32 = @divTrunc(config.SCREEN_WIDTH - score_text_width, 2);
+            rl.drawText(score_text, score_x, config.SCREEN_HEIGHT / 2 - 10, 24, config.HUD_COLOR);
 
             rl.drawText("Press Enter to continue", config.SCREEN_WIDTH / 2 - 120, config.SCREEN_HEIGHT / 2 + 30, 20, config.HUD_COLOR);
         }
@@ -564,14 +569,18 @@ pub const Game = struct {
     fn renderTerminalHint(_: *Self) void {
         // Draw hint at top center of screen
         const hint = "Bugs squashed! Go to terminal and press Enter";
-        const hint_width = 360;
-        const hint_x = config.SCREEN_WIDTH / 2 - hint_width / 2;
-        const hint_y = 90;
+        const hint_y: i32 = 90;
+
+        // Measure the exact pixel width of the hint text and add padding so the
+        // background box always covers the full length of the rendered text.
+        const hint_text_width: i32 = rl.measureText(hint, 18);
+        const padding: i32 = 10;
+        const hint_x: i32 = @divTrunc(config.SCREEN_WIDTH - hint_text_width, 2);
 
         // Background box
         var bg_color = rl.Color.black;
         bg_color.a = 180;
-        rl.drawRectangle(hint_x - 10, hint_y - 5, hint_width + 20, 30, bg_color);
+        rl.drawRectangle(hint_x - padding, hint_y - 5, hint_text_width + (padding * 2), 30, bg_color);
 
         // Hint text
         rl.drawText(hint, hint_x, hint_y, 18, config.HUD_COLOR);

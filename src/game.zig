@@ -149,6 +149,12 @@ pub const Game = struct {
 
         // Reset tilemap (keep current dimensions; loadLevel can resize if needed)
         self.tilemap = Tilemap.initDefault();
+        self.tilemap.setBackgroundTheme(switch (level) {
+            0 => .motherboard,
+            1 => .cooling_bay,
+            2 => .core_chamber,
+            else => .motherboard,
+        });
 
         // Reset bugs
         self.bugs.reset();
@@ -285,6 +291,8 @@ pub const Game = struct {
     }
 
     pub fn update(self: *Self, dt: f32) void {
+        self.tilemap.updateBackground(dt);
+
         // Update music stream
         if (self.music) |*music| {
             music.update(dt);

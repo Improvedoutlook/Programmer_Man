@@ -55,20 +55,26 @@ zig build run
 
 ## Current Status
 
-✅ **Code Complete**: The game is fully implemented in Zig with all mechanics working.  
-⏳ **Graphics Integration**: Currently working on integrating raylib rendering.
+✅ **Playable & Integrated**: Core gameplay systems are implemented and playable. Raylib rendering is integrated — tilemap, background, player sprite, and procedural enemy/tile rendering all work.  
+✅ **Audio**: SFX and music playback are supported and asset files are included under `assets/audio/` and `assets/music/`.  
+✅ **Levels**: Three levels are provided as JSON (`assets/data/level1.json`, `assets/data/level2.json`, `assets/data/level3.json`) with a hardcoded fallback builder.
 
 ### What's Implemented
 
-- ✅ Player physics & movement system
-- ✅ Enemy AI (patrol behavior)  
-- ✅ Collision detection (tile-based AABB)
-- ✅ Stomp mechanic & scoring
-- ✅ Game states (playing, paused, game over, victory)
-- ✅ Input handling
-- ✅ Level generation
-- ✅ HUD system (score, lives)
-- ⏳ Graphics rendering (in progress)
+- ✅ Player physics & movement (run, jump, coyote time, jump buffering, variable jump)
+- ✅ Enemy AI (walker patrols and jumper behavior)
+- ✅ Tile-based AABB collision and collision resolution
+- ✅ Stomp mechanic, bounce, and scoring (+100 per stomp)
+- ✅ Lives, health, respawn, and invincibility frames
+- ✅ HUD (score, lives, health/status, game over UI)
+- ✅ Level loading from JSON with a fallback builder
+- ✅ Hazards (falling sparks) and environmental interactions
+- ✅ Camera with render-to-texture scaling and window resizing support
+- ✅ Graphics rendering (procedural tiles/enemies; player sprite support)
+- ✅ Audio playback (SFX and music streaming)
+- ✅ Parallax background and decorative elements
+- ✅ Game states (playing, paused, game over, victory/level-complete)
+- ✅ Input handling (keyboard mappings, pause, restart, enter to advance)
 
 ## Getting Graphics Working
 
@@ -114,12 +120,26 @@ tile-based-raylib-game/
 │   ├── player.zig      # Player physics & rendering
 │   ├── enemy.zig       # Bug enemy AI
 │   ├── tilemap.zig     # Level tiles & collision
-│   └── raylib.zig      # raylib bindings
+│   ├── hazards.zig     # Environmental hazards (sparks)
+│   ├── audio.zig       # Music + SFX playback
+│   ├── background.zig  # Parallax/background effects
+│   └── test_window.zig # Small test harness
 ├── assets/
 │   ├── data/
-│   │   └── level1.json # Level data
-│   └── audio/
-│       └── placeholder.txt
+│   │   ├── level1.json
+│   │   ├── level2.json
+│   │   ├── level3.json
+│   │   └── tileset.json
+│   ├── audio/
+│   │   ├── jump.wav
+│   │   ├── pounce.wav
+│   │   └── stomp.wav
+│   ├── music/
+│   │   ├── lost_in_hyperspace.mp3
+│   │   ├── danger_streets.mp3
+│   │   └── lone_fighter.mp3
+│   └── Sprites/
+│       └── player.png
 └── docs/
     └── PRD.md          # Product Requirements
 ```
@@ -128,7 +148,7 @@ tile-based-raylib-game/
 
 ### Tile System
 - Tile size: 16x16 pixels
-- Player size: 14x16 pixels
+- Player size: 24x36 pixels (configured in `src/config.zig`)
 - Screen: 800x600 pixels (50x37 tiles)
 
 ### Physics
@@ -149,28 +169,27 @@ tile-based-raylib-game/
 - [x] Basic physics (gravity, max fall speed, variable jump)
 - [x] Enemy (bug) movement and patrol AI
 - [x] Stomp-to-defeat mechanic with bounce
-- [x] One playable level with hardware theme
-- [x] Placeholder graphics (rendered shapes)
+- [x] One playable level with hardware theme (JSON levels + fallback builder)
+- [x] Basic rendering (procedural tiles & shapes; player sprite present)
 - [x] Scoring system (+100 per stomp)
 - [x] Lives and respawn system
 - [x] Game over / Victory states
 - [x] Pause functionality
-- [ ] Graphics rendering (in progress)
+- [x] Graphics rendering (raylib integration complete)
+- [x] Audio playback (SFX and music)
 
 ## Future Enhancements (Post Phase 1)
 
-- [ ] Sprite-based graphics (replace placeholder)
-- [ ] Sound effects (jump, stomp, music)
-- [ ] Multiple levels with progressive difficulty
+- [ ] Expand sprite coverage and animations (enemies, tiles, VFX)
+- [ ] More levels with progressive difficulty (beyond the included 3)
 - [ ] Power-ups (speedboost, shield, etc.)
-- [ ] Animated sprites
-- [ ] Parallax scrolling background
 - [ ] Save/load system
-- [ ] High score tracking
+- [ ] High score tracking and leaderboards
+- [ ] Polish art, animations, and audio mix
 
 ## Code Statistics
 
-- **~1000 lines** of pure Zig game code
+- **~2.9k lines** of pure Zig game code
 - **Zero external dependencies** (except graphics library)
 - **Full physics simulation** with proper collision
 - **Complete game loop** with state management
@@ -183,4 +202,4 @@ This project is licensed under the MIT License.
 
 ## Notes
 
-This is a Phase 1 MVP focusing on core gameplay mechanics. All game logic is complete and tested. The next phase will integrate a graphics library and add visual polish.
+Graphics and audio are integrated; this repository contains a playable MVP focusing on core gameplay. Next work: art/animation polish, level design, balancing, and additional features listed above.

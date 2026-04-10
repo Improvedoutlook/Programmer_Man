@@ -3,6 +3,7 @@
 const std = @import("std");
 const rl = @import("raylib");
 const config = @import("config.zig");
+const controls = @import("controls.zig");
 const Player = @import("player.zig").Player;
 const Tilemap = @import("tilemap.zig").Tilemap;
 const tilemap_builder = @import("tilemap.zig");
@@ -84,6 +85,8 @@ pub const Game = struct {
     terminal_pos: ?struct { x: i32, y: i32 },
     player_texture: ?rl.Texture2D,
     game_complete: bool,
+    has_gamepad: bool,
+    gamepad_name: ?[:0]const u8,
 
     const Self = @This();
     const MAX_LEVELS: u8 = 3; // Total number of levels (Level 1 = index 0, Level 2 = index 1, Level 3 = index 2)
@@ -118,6 +121,8 @@ pub const Game = struct {
             .terminal_pos = null,
             .player_texture = player_texture,
             .game_complete = false,
+            .has_gamepad = false,
+            .gamepad_name = null,
         };
     }
 
@@ -292,6 +297,9 @@ pub const Game = struct {
 
     pub fn update(self: *Self, dt: f32) void {
         self.tilemap.updateBackground(dt);
+        const input = controls.poll();
+        self.has_gamepad = input.has_gamepad;
+        self.gamepad_name = input.gamepad_name;
 
         // Update music stream
         if (self.music) |*music| {
@@ -309,22 +317,22 @@ pub const Game = struct {
         }
 
         switch (self.state) {
-            .playing => self.updatePlaying(dt),
-            .paused => self.updatePaused(),
-            .game_over => self.updateGameOver(),
-            .victory => self.updateVictory(),
+            .playing => self.updatePlaying(dt, input),
+            .paused => self.updatePaused(input),
+            .game_over => self.updateGameOver(input),
+            .victory => self.updateVictory(input),
         }
     }
 
-    fn updatePlaying(self: *Self, dt: f32) void {
+    fn updatePlaying(self: *Self, dt: f32, input: controls.FrameInput) void {
         // Check for pause
-        if (rl.isKeyPressed(.escape) or rl.isKeyPressed(.p)) {
+        if (input.pause_pressed) {
             self.state = .paused;
             return;
         }
 
         // Update player
-        self.player.handleInput();
+        self.player.handleInput(input);
         self.player.update(dt, &self.tilemap);
 
         // Update enemies
@@ -378,9 +386,7 @@ pub const Game = struct {
                     player_rect.y < term_y + term_h and
                     player_rect.y + player_rect.height > term_y;
 
-                const enter_pressed = rl.isKeyPressed(.enter) or rl.isKeyPressed(.kp_enter) or rl.isKeyPressed(.e);
-
-                if (overlaps and enter_pressed) {
+                if (overlaps and input.submit_pressed) {
                     // STOP BACKGROUND MUSIC AND PLAY VICTORY MUSIC
                     if (self.music) |*music| {
                         music.stop();
@@ -397,14 +403,14 @@ pub const Game = struct {
         }
     }
 
-    fn updatePaused(self: *Self) void {
-        if (rl.isKeyPressed(.escape) or rl.isKeyPressed(.p)) {
+    fn updatePaused(self: *Self, input: controls.FrameInput) void {
+        if (input.pause_pressed) {
             self.state = .playing;
         }
     }
 
-    fn updateGameOver(self: *Self) void {
-        if (rl.isKeyPressed(.r)) {
+    fn updateGameOver(self: *Self, input: controls.FrameInput) void {
+        if (input.restart_pressed) {
             // Stop game over music before restarting
             if (self.game_over_music) |*game_over_music| {
                 game_over_music.stop();
@@ -416,10 +422,10 @@ pub const Game = struct {
         }
     }
 
-    fn updateVictory(self: *Self) void {
+    fn updateVictory(self: *Self, input: controls.FrameInput) void {
         if (self.game_complete) {
             // Final victory — press R to restart from Level 1 with fresh stats
-            if (rl.isKeyPressed(.r)) {
+            if (input.restart_pressed) {
                 if (self.victory_music) |*victory_music| {
                     victory_music.stop();
                 }
@@ -431,7 +437,7 @@ pub const Game = struct {
             }
         } else {
             // Level complete — press Enter to advance to next level
-            if (rl.isKeyPressed(.enter) or rl.isKeyPressed(.kp_enter) or rl.isKeyPressed(.e)) {
+            if (input.submit_pressed) {
                 if (self.victory_music) |*victory_music| {
                     victory_music.stop();
                 }
@@ -474,7 +480,7 @@ pub const Game = struct {
         self.camera.rl_camera.end();
 
         // === Screen-space rendering (HUD & overlays — not affected by camera) ===
-        self.player.renderHUD();
+        self.player.renderHUD(self.has_gamepad, self.gamepad_name);
 
         // Render terminal hint if all bugs defeated
         if (self.all_bugs_defeated and self.state == .playing) {
@@ -489,7 +495,7 @@ pub const Game = struct {
         }
     }
 
-    fn renderPausedOverlay(_: *Self) void {
+    fn renderPausedOverlay(self: *Self) void {
         // Semi-transparent overlay
         var overlay_color = rl.Color.white;
         overlay_color.a = 150;
@@ -501,7 +507,12 @@ pub const Game = struct {
 
         // Pause text
         rl.drawText("PAUSED", config.SCREEN_WIDTH / 2 - 80, config.SCREEN_HEIGHT / 2 - 30, 40, config.HUD_COLOR);
-        rl.drawText("Press P or ESC to continue", config.SCREEN_WIDTH / 2 - 120, config.SCREEN_HEIGHT / 2 + 20, 20, config.HUD_COLOR);
+        var continue_buf: [96]u8 = undefined;
+        const continue_prompt = controls.getActionPrompt(.pause, self.has_gamepad);
+        const continue_text = std.fmt.bufPrintZ(&continue_buf, "Press {s} to continue", .{continue_prompt}) catch "Press P or ESC to continue";
+        const continue_text_width = rl.measureText(continue_text, 20);
+        const continue_x: i32 = @divTrunc(config.SCREEN_WIDTH - continue_text_width, 2);
+        rl.drawText(continue_text, continue_x, config.SCREEN_HEIGHT / 2 + 20, 20, config.HUD_COLOR);
     }
 
     fn renderVictoryOverlay(self: *Self) void {
@@ -523,7 +534,12 @@ pub const Game = struct {
             const score_text = std.fmt.bufPrintZ(&score_buf, "Final Score: {d}", .{self.player.score}) catch "Final Score: ???";
             rl.drawText(score_text, config.SCREEN_WIDTH / 2 - 80, config.SCREEN_HEIGHT / 2 + 25, 24, config.HUD_COLOR);
 
-            rl.drawText("Press R to Restart", config.SCREEN_WIDTH / 2 - 90, config.SCREEN_HEIGHT / 2 + 65, 20, config.HUD_COLOR);
+            var restart_buf: [96]u8 = undefined;
+            const restart_prompt = controls.getActionPrompt(.restart, self.has_gamepad);
+            const restart_text = std.fmt.bufPrintZ(&restart_buf, "Press {s} to Restart", .{restart_prompt}) catch "Press R to Restart";
+            const restart_text_width = rl.measureText(restart_text, 20);
+            const restart_x: i32 = @divTrunc(config.SCREEN_WIDTH - restart_text_width, 2);
+            rl.drawText(restart_text, restart_x, config.SCREEN_HEIGHT / 2 + 65, 20, config.HUD_COLOR);
         } else {
             // Level complete — more levels ahead
             // Show which level was completed (current_level is 0-indexed, display as 1-indexed)
@@ -541,7 +557,12 @@ pub const Game = struct {
             const score_x: i32 = @divTrunc(config.SCREEN_WIDTH - score_text_width, 2);
             rl.drawText(score_text, score_x, config.SCREEN_HEIGHT / 2 - 10, 24, config.HUD_COLOR);
 
-            rl.drawText("Press Enter to continue", config.SCREEN_WIDTH / 2 - 120, config.SCREEN_HEIGHT / 2 + 30, 20, config.HUD_COLOR);
+            var continue_buf: [112]u8 = undefined;
+            const continue_prompt = controls.getActionPrompt(.submit, self.has_gamepad);
+            const continue_text = std.fmt.bufPrintZ(&continue_buf, "Press {s} to continue", .{continue_prompt}) catch "Press Enter to continue";
+            const continue_text_width = rl.measureText(continue_text, 20);
+            const continue_x: i32 = @divTrunc(config.SCREEN_WIDTH - continue_text_width, 2);
+            rl.drawText(continue_text, continue_x, config.SCREEN_HEIGHT / 2 + 30, 20, config.HUD_COLOR);
         }
     }
 
@@ -574,9 +595,11 @@ pub const Game = struct {
         }
     }
 
-    fn renderTerminalHint(_: *Self) void {
+    fn renderTerminalHint(self: *Self) void {
         // Draw hint at top center of screen
-        const hint = "Bugs squashed! Go to terminal and press Enter";
+        var hint_buf: [128]u8 = undefined;
+        const submit_prompt = controls.getActionPrompt(.submit, self.has_gamepad);
+        const hint = std.fmt.bufPrintZ(&hint_buf, "Bugs squashed! Go to terminal and press {s}", .{submit_prompt}) catch "Bugs squashed! Go to terminal";
         const hint_y: i32 = 90;
 
         // Measure the exact pixel width of the hint text and add padding so the

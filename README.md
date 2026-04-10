@@ -24,6 +24,25 @@ Programmer_Man is a retro-style platformer where you play as a programmer naviga
 | Pause | `P` or `Escape` |
 | Restart (after game over) | `R` |
 
+## Controller Support (Windows — Wireless Controllers)
+
+The game supports wireless controllers. For many DualShock/DualSense and clone controllers on Windows, using a small helper app (DS4Windows) to create a virtual XInput controller produces reliable input.
+
+Quick setup (Windows):
+
+1. Download DS4Windows from the official releases: https://github.com/Ryochan7/DS4Windows/releases
+2. Run the installer or extract the portable ZIP and run `DS4Windows.exe`. When prompted, install the **ViGEmBus** driver (this is required to create a virtual XInput device).
+3. Connect your controller via Bluetooth or USB. DS4Windows will present a virtual X360/XInput controller to Windows.
+4. Calibrate the virtual controller (important):
+    - Press `Windows+R`, run `joy.cpl` to open "Set up USB game controllers".
+    - Select the DS4Windows virtual controller (e.g. "Controller (XBOX 360 For Windows") and click "Properties".
+    - Click "Calibrate..." and follow the Windows calibration wizard. After finishing, click "Apply" to save the calibration.
+5. Launch the game while DS4Windows is running. The game will detect the virtual controller and buttons/sticks should work as expected.
+
+Notes:
+- Steam Input can also be used to remap controllers on Windows if you prefer not to use DS4Windows.
+- Keep DS4Windows running while playing so the virtual controller remains available.
+
 ## Gameplay Mechanics
 
 ### Movement

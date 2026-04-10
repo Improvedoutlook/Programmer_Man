@@ -7,6 +7,7 @@ const rl = @import("raylib");
 const Game = @import("game.zig").Game;
 const Background = @import("background.zig").Background;
 const config = @import("config.zig");
+const controls = @import("controls.zig");
 
 pub fn main() !void {
     // Enable window resizing BEFORE creating window
@@ -24,6 +25,7 @@ pub fn main() !void {
     defer rl.closeAudioDevice();
 
     rl.setTargetFPS(60);
+    controls.init();
 
     // Create render texture for fixed internal resolution
     // This is the key to resizable windows: we always render the game at 800x600,
@@ -113,7 +115,6 @@ pub fn main() !void {
     }
 
     // Ensure clean exit - explicitly flush any pending operations
-    std.debug.print("Game window closed, shutting down...\n", .{});
 }
 
 /// Calculates the scale factor to fit the game into the window while maintaining aspect ratio
@@ -131,7 +132,8 @@ fn calculateScale(game_width: i32, game_height: i32, window_width: i32, window_h
     return @min(scale_x, scale_y);
 }
 
-test "basic game initialization" {
-    const game = Game.init();
-    _ = game;
+test "calculateScale preserves aspect ratio" {
+    try std.testing.expect(calculateScale(800, 600, 1600, 1200) == 2.0);
+    try std.testing.expect(calculateScale(800, 600, 1600, 900) == 1.5);
+    try std.testing.expect(calculateScale(800, 600, 1200, 1200) == 1.5);
 }

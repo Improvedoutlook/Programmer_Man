@@ -3,8 +3,8 @@
 const std = @import("std");
 const rl = @import("raylib");
 const config = @import("config.zig");
+const controls = @import("controls.zig");
 const Tilemap = @import("tilemap.zig").Tilemap;
-const audio = @import("audio.zig");
 
 const FRAME_W: f32 = 83.0; // 500px sheet / 6 columns
 const FRAME_H: f32 = 100.0; // content height per frame row
@@ -109,16 +109,14 @@ pub const Player = struct {
         self.invincible_timer = 2.0; // Brief invincibility after respawn
     }
 
-    pub fn handleInput(self: *Self) void {
+    pub fn handleInput(self: *Self, input: controls.FrameInput) void {
         // Horizontal movement
-        var move_input: f32 = 0;
+        const move_input = input.move_x;
 
-        if (rl.isKeyDown(.a) or rl.isKeyDown(.left)) {
-            move_input -= 1;
+        if (move_input < 0) {
             self.facing_right = false;
         }
-        if (rl.isKeyDown(.d) or rl.isKeyDown(.right)) {
-            move_input += 1;
+        if (move_input > 0) {
             self.facing_right = true;
         }
 
@@ -127,10 +125,10 @@ pub const Player = struct {
         self.vx = move_input * config.PLAYER_RUN_SPEED * accel_factor;
 
         // Jump input - set buffer timer when jump is pressed
-        if (rl.isKeyPressed(.space) or rl.isKeyPressed(.w) or rl.isKeyPressed(.up)) {
+        if (input.jump_pressed) {
             self.jump_buffer_timer = 0.15; // Remember jump press for 0.15 seconds
         }
-        self.jump_held = rl.isKeyDown(.space) or rl.isKeyDown(.w) or rl.isKeyDown(.up);
+        self.jump_held = input.jump_down;
     }
 
     pub fn update(self: *Self, dt: f32, tilemap: *const Tilemap) void {
@@ -360,7 +358,7 @@ pub const Player = struct {
         );
     }
 
-    pub fn renderHUD(self: *const Self) void {
+    pub fn renderHUD(self: *const Self, has_gamepad: bool, gamepad_name: ?[:0]const u8) void {
         // Score
         var score_buf: [64]u8 = undefined;
         const score_text = std.fmt.bufPrintZ(&score_buf, "SCORE: {d}", .{self.score}) catch "SCORE: ???";
@@ -391,10 +389,24 @@ pub const Player = struct {
 
         rl.drawText(health_status, health_x, health_y, 18, health_color);
 
+        if (gamepad_name) |name| {
+            var controller_buf: [128]u8 = undefined;
+            const controller_text = std.fmt.bufPrintZ(&controller_buf, "CONTROLLER: {s}", .{name}) catch "CONTROLLER: Connected";
+            rl.drawText(controller_text, 10, 82, 16, config.HUD_COLOR);
+        } else if (has_gamepad) {
+            rl.drawText("CONTROLLER: Connected", 10, 82, 16, config.HUD_COLOR);
+        }
+
         // Game over message
         if (self.state == .dead) {
+            var restart_buf: [96]u8 = undefined;
+            const restart_prompt = controls.getActionPrompt(.restart, has_gamepad);
+            const restart_text = std.fmt.bufPrintZ(&restart_buf, "Press {s} to Restart", .{restart_prompt}) catch "Press R to Restart";
+            const restart_text_width = rl.measureText(restart_text, 20);
+            const restart_text_x = @divTrunc(config.SCREEN_WIDTH - restart_text_width, 2);
+
             rl.drawText("GAME OVER", config.SCREEN_WIDTH / 2 - 100, config.SCREEN_HEIGHT / 2 - 20, 40, rl.Color.red);
-            rl.drawText("Press R to Restart", config.SCREEN_WIDTH / 2 - 90, config.SCREEN_HEIGHT / 2 + 30, 20, config.HUD_COLOR);
+            rl.drawText(restart_text, restart_text_x, config.SCREEN_HEIGHT / 2 + 30, 20, config.HUD_COLOR);
         }
     }
 };

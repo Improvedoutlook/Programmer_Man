@@ -31,6 +31,8 @@ pub const PLAYER_JUMP_IMPULSE: f32 = 450.0; // pixels/second
 pub const PLAYER_MAX_FALL_SPEED: f32 = 900.0; // pixels/second
 pub const PLAYER_AIR_CONTROL: f32 = 0.6; // 60% of ground acceleration
 pub const PLAYER_BOUNCE_FACTOR: f32 = 0.6; // 60% of jump impulse on stomp
+pub const GAMEPAD_AXIS_DEADZONE: f32 = 0.25;
+pub const MAX_GAMEPADS: i32 = 4;
 
 // Enemy (Bug) parameters
 pub const BUG_WIDTH: f32 = 16;

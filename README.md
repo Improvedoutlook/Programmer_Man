@@ -6,6 +6,12 @@ A simple 2D platformer written in **Zig** using **raylib**.
 
 Programmer_Man is a retro-style platformer where you play as a programmer navigating the dangerous world inside a computer motherboard. Jump on bugs to squash them and earn points!
 
+## Screenshots
+
+![Opening Screen](assets/Images/PM_OpeningImage.png)
+
+![Gameplay](assets/Images/Screenshot.png)
+
 ## Features
 
 - **Classic platformer mechanics**: Run, jump, and stomp enemies

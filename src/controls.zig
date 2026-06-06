@@ -355,3 +355,19 @@ test "submit prompt includes controller guidance when available" {
 test "pause prompt stays keyboard friendly without controller" {
     try std.testing.expectEqualStrings("P or ESC", getActionPrompt(.pause, false));
 }
+
+pub fn isAnyGamepadButtonPressed() bool {
+    var gamepad_index: i32 = 0;
+    while (gamepad_index < config.MAX_GAMEPADS) : (gamepad_index += 1) {
+        if (rl.isGamepadAvailable(gamepad_index)) {
+            var button: i32 = 0;
+            while (button < 15) : (button += 1) {
+                if (rl.isGamepadButtonPressed(gamepad_index, @enumFromInt(button))) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+

@@ -1,4 +1,5 @@
 //! Game module - Main game state management and coordination
+//! Game module - Main game state management and coordination
 
 const std = @import("std");
 const rl = @import("raylib");
@@ -13,6 +14,7 @@ const SparkManager = @import("hazards.zig").SparkManager;
 const audio = @import("audio.zig");
 
 pub const GameState = enum {
+    opening,
     playing,
     paused,
     game_over,
@@ -81,9 +83,11 @@ pub const Game = struct {
     music: ?audio.ChiptunePlayer,
     victory_music: ?audio.VictoryMusic,
     game_over_music: ?audio.GameOverMusic,
+    opening_music: ?audio.OpeningMusic,
     all_bugs_defeated: bool,
     terminal_pos: ?struct { x: i32, y: i32 },
     player_texture: ?rl.Texture2D,
+    opening_texture: ?rl.Texture2D,
     game_complete: bool,
     has_gamepad: bool,
     gamepad_name: ?[:0]const u8,
@@ -96,27 +100,28 @@ pub const Game = struct {
         // Load SFX first
         audio.loadSfx();
 
-        var music_player: ?audio.ChiptunePlayer = audio.ChiptunePlayer.init() catch null;
-
-        if (music_player) |*m| {
-            m.play();
-        }
+        const music_player: ?audio.ChiptunePlayer = audio.ChiptunePlayer.init() catch null;
 
         const victory_music_player: ?audio.VictoryMusic = audio.VictoryMusic.init() catch null;
         const game_over_music_player: ?audio.GameOverMusic = audio.GameOverMusic.init() catch null;
-        const player_texture = rl.loadTexture("assets/sprites/player.png") catch null;
+        const opening_music_player: ?audio.OpeningMusic = audio.OpeningMusic.init() catch null;
 
-        return Self{
+        const player_texture = rl.loadTexture("assets/sprites/player.png") catch null;
+        const opening_texture = rl.loadTexture("assets/Images/PM_OpeningImage.png") catch null;
+
+        var game = Self{
             .player = Player.init(),
             .tilemap = Tilemap.initDefault(),
             .bugs = BugManager.init(),
             .sparks = SparkManager.init(),
             .camera = Camera.init(),
-            .state = .playing,
+            .state = .opening,
             .current_level = 0,
             .music = music_player,
             .victory_music = victory_music_player,
             .game_over_music = game_over_music_player,
+            .opening_music = opening_music_player,
+            .opening_texture = opening_texture,
             .all_bugs_defeated = false,
             .terminal_pos = null,
             .player_texture = player_texture,
@@ -124,6 +129,12 @@ pub const Game = struct {
             .has_gamepad = false,
             .gamepad_name = null,
         };
+
+        if (game.opening_music) |*m| {
+            m.play();
+        }
+
+        return game;
     }
 
     pub fn deinit(self: *Self) void {
@@ -135,6 +146,12 @@ pub const Game = struct {
         }
         if (self.game_over_music) |*game_over_music| {
             game_over_music.deinit();
+        }
+        if (self.opening_music) |*opening_music| {
+            opening_music.deinit();
+        }
+        if (self.opening_texture) |tex| {
+            rl.unloadTexture(tex);
         }
         audio.unloadSfx();
 
@@ -218,13 +235,15 @@ pub const Game = struct {
             },
         }
 
-        // Switch background music based on level
-        if (self.music) |*music| {
-            switch (level) {
-                0 => music.switchTrack("assets/music/lost_in_hyperspace.mp3"),
-                1 => music.switchTrack("assets/music/danger_streets.mp3"),
-                2 => music.switchTrack("assets/music/lone_fighter.mp3"),
-                else => music.switchTrack("assets/music/lost_in_hyperspace.mp3"),
+        // Switch background music based on level (only if not in opening state)
+        if (self.state != .opening) {
+            if (self.music) |*music| {
+                switch (level) {
+                    0 => music.switchTrack("assets/music/lost_in_hyperspace.mp3"),
+                    1 => music.switchTrack("assets/music/danger_streets.mp3"),
+                    2 => music.switchTrack("assets/music/lone_fighter.mp3"),
+                    else => music.switchTrack("assets/music/lost_in_hyperspace.mp3"),
+                }
             }
         }
 
@@ -316,11 +335,28 @@ pub const Game = struct {
             game_over_music.update();
         }
 
+        // Update opening music stream
+        if (self.opening_music) |*opening_music| {
+            opening_music.update();
+        }
+
         switch (self.state) {
+            .opening => self.updateOpening(input),
             .playing => self.updatePlaying(dt, input),
             .paused => self.updatePaused(input),
             .game_over => self.updateGameOver(input),
             .victory => self.updateVictory(input),
+        }
+    }
+
+    fn updateOpening(self: *Self, input: controls.FrameInput) void {
+        _ = input;
+        if (rl.isKeyPressed(.enter) or rl.isKeyPressed(.kp_enter) or controls.isAnyGamepadButtonPressed()) {
+            if (self.opening_music) |*m| {
+                m.stop();
+            }
+            self.state = .playing;
+            self.loadLevel(0);
         }
     }
 
@@ -449,6 +485,37 @@ pub const Game = struct {
     }
 
     pub fn render(self: *Self) void {
+        if (self.state == .opening) {
+            rl.clearBackground(rl.Color.black);
+            if (self.opening_texture) |tex| {
+                const src = rl.Rectangle{
+                    .x = 0,
+                    .y = 0,
+                    .width = @floatFromInt(tex.width),
+                    .height = @floatFromInt(tex.height),
+                };
+                const dest = rl.Rectangle{
+                    .x = 0,
+                    .y = 0,
+                    .width = @floatFromInt(config.GAME_WIDTH),
+                    .height = @floatFromInt(config.GAME_HEIGHT),
+                };
+                rl.drawTexturePro(tex, src, dest, rl.Vector2{ .x = 0, .y = 0 }, 0, rl.Color.white);
+            }
+            // Draw a subtle flashing text prompt at the bottom of the screen
+            const text = "PRESS ENTER OR ANY CONTROLLER BUTTON TO START";
+            const font_size = 20;
+            const text_width = rl.measureText(text, font_size);
+            const x = @divTrunc(config.GAME_WIDTH - text_width, 2);
+            // Flash text using time (sine wave)
+            const time = @as(f32, @floatCast(rl.getTime()));
+            const alpha = @as(u8, @intFromFloat(127.0 + 127.0 * @sin(time * 4.0)));
+            var text_color = config.HUD_COLOR;
+            text_color.a = alpha;
+            rl.drawText(text, x, config.GAME_HEIGHT - 60, font_size, text_color);
+            return;
+        }
+
         // === World-space rendering (scrolls with camera) ===
         self.camera.rl_camera.begin();
         {

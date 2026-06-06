@@ -45,7 +45,6 @@ pub fn main() !void {
     // Initialize game state
     var game = Game.init();
     defer game.deinit();
-    game.loadLevel(0);
 
     // Initialize background effects
     var background = Background.init();

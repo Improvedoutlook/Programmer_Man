@@ -705,6 +705,16 @@ const JsonBug = struct {
     speed: f32 = 1.0,
     ai: []const u8 = "walker",
 };
+const JsonMovingPlatform = struct {
+    x: i32,
+    y: i32,
+    width: i32,
+    tile_type: []const u8 = "solid",
+    axis: []const u8 = "horizontal",
+    distance: i32,
+    speed: f32 = 1.0,
+    phase: f32 = 0.0,
+};
 const JsonLevelSchema = struct {
     name: []const u8,
     description: []const u8,
@@ -716,6 +726,8 @@ const JsonLevelSchema = struct {
     platforms: []const JsonPlatform,
     decorations: []const JsonDecoration,
     bugs: []const JsonBug,
+    // Optional — Levels 1–3 omit this and default to an empty slice.
+    moving_platforms: []const JsonMovingPlatform = &.{},
 };
 
 pub const MAX_SPAWN_ENTRIES: usize = 32;
@@ -738,6 +750,19 @@ pub const SparkSpawn = struct {
     tile_y: i32,
 };
 
+pub const MAX_MOVING_PLATFORMS: usize = 16;
+
+pub const MovingPlatformSpawn = struct {
+    tile_x: i32,
+    tile_y: i32,
+    width_tiles: i32,
+    tile_type: TileType,
+    vertical: bool, // false = horizontal
+    distance_tiles: i32,
+    speed_tiles: f32,
+    phase: f32,
+};
+
 pub const LevelData = struct {
     player_spawn_x: i32,
     player_spawn_y: i32,
@@ -747,6 +772,8 @@ pub const LevelData = struct {
     bug_count: usize,
     spark_spawns: [MAX_SPAWN_ENTRIES]SparkSpawn,
     spark_count: usize,
+    moving_platforms: [MAX_MOVING_PLATFORMS]MovingPlatformSpawn,
+    moving_platform_count: usize,
 };
 
 fn jsonTileType(name: []const u8) TileType {
@@ -804,6 +831,8 @@ pub fn loadLevelFromJson(tilemap: *Tilemap, path: []const u8) !LevelData {
         .bug_count = 0,
         .spark_spawns = undefined,
         .spark_count = 0,
+        .moving_platforms = undefined,
+        .moving_platform_count = 0,
     };
 
     // Collect bug spawns
@@ -836,6 +865,22 @@ pub fn loadLevelFromJson(tilemap: *Tilemap, path: []const u8) !LevelData {
             };
             result.spark_count += 1;
         }
+    }
+
+    // Collect moving platforms (capped at MAX_MOVING_PLATFORMS).
+    for (level.moving_platforms) |mp| {
+        if (result.moving_platform_count >= MAX_MOVING_PLATFORMS) break;
+        result.moving_platforms[result.moving_platform_count] = .{
+            .tile_x = mp.x,
+            .tile_y = mp.y,
+            .width_tiles = mp.width,
+            .tile_type = jsonTileType(mp.tile_type),
+            .vertical = std.mem.eql(u8, mp.axis, "vertical"),
+            .distance_tiles = mp.distance,
+            .speed_tiles = mp.speed,
+            .phase = mp.phase,
+        };
+        result.moving_platform_count += 1;
     }
 
     return result;

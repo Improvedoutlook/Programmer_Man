@@ -11,6 +11,7 @@ const tilemap_builder = @import("tilemap.zig");
 const BugManager = @import("enemy.zig").BugManager;
 const AiType = @import("tilemap.zig").AiType;
 const SparkManager = @import("hazards.zig").SparkManager;
+const MovingPlatformManager = @import("platform.zig").MovingPlatformManager;
 const audio = @import("audio.zig");
 
 pub const GameState = enum {
@@ -77,6 +78,7 @@ pub const Game = struct {
     tilemap: Tilemap,
     bugs: BugManager,
     sparks: SparkManager,
+    moving_platforms: MovingPlatformManager,
     camera: Camera,
     state: GameState,
     current_level: u8,
@@ -114,6 +116,7 @@ pub const Game = struct {
             .tilemap = Tilemap.initDefault(),
             .bugs = BugManager.init(),
             .sparks = SparkManager.init(),
+            .moving_platforms = MovingPlatformManager.init(),
             .camera = Camera.init(),
             .state = .opening,
             .current_level = 0,
@@ -184,6 +187,9 @@ pub const Game = struct {
 
         // Reset sparks
         self.sparks.reset();
+
+        // Reset moving platforms
+        self.moving_platforms.reset();
 
         // Reset terminal state
         self.all_bugs_defeated = false;
@@ -293,6 +299,11 @@ pub const Game = struct {
         // Tell spark manager how tall the level is (for deactivation)
         self.sparks.level_pixel_height = self.tilemap.getLevelPixelHeight();
 
+        // Spawn moving platforms from loaded data
+        for (0..level_data.moving_platform_count) |i| {
+            self.moving_platforms.spawn(level_data.moving_platforms[i]);
+        }
+
         self.terminal_pos = .{ .x = level_data.terminal_x, .y = level_data.terminal_y };
         spawn_x.* = level_data.player_spawn_x;
         spawn_y.* = level_data.player_spawn_y;
@@ -390,6 +401,9 @@ pub const Game = struct {
 
         // Update sparks
         self.sparks.update(dt);
+
+        // Update moving platforms (carry/collision is Phase 4)
+        self.moving_platforms.update(dt);
 
         // Update camera to follow player
         self.camera.follow(
@@ -542,6 +556,9 @@ pub const Game = struct {
 
             // Render terminal
             self.renderTerminal();
+
+            // Render moving platforms (after tilemap, before bugs/player)
+            self.moving_platforms.render();
 
             // Render sparks (behind bugs and player)
             self.sparks.render();

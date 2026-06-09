@@ -1,0 +1,95 @@
+{
+    "meta": {
+        "tile_types": "solid, chip, capacitor, trace — see tilemap.zig TileType enum",
+        "ai_types": "walker (default), jumper (intermittent jumping)",
+        "moving_platforms": "axis horizontal|vertical, distance in tiles, speed in tiles/sec, phase 0..1"
+    },
+    "name": "Silicon Ascent",
+    "description": "Level 4 - Climb the heatsink tower. Ride the buses up to the summit terminal.",
+    "width": 60,
+    "height": 150,
+    "spawn": { "x": 5, "y": 148 },
+    "terminal": { "x": 30, "y": 4 },
+    "music": "transmission",
+    "ground": {
+        "y": 148,
+        "segments": [
+            { "x1": 0, "x2": 60 }
+        ]
+    },
+    "platforms": [
+        { "x1": 2,  "x2": 12, "y": 144, "tile_type": "solid" },
+        { "x1": 10, "x2": 20, "y": 140, "tile_type": "chip" },
+        { "x1": 18, "x2": 28, "y": 136, "tile_type": "solid" },
+        { "x1": 26, "x2": 36, "y": 132, "tile_type": "capacitor", "sparks": true },
+        { "x1": 34, "x2": 44, "y": 128, "tile_type": "solid" },
+        { "x1": 42, "x2": 52, "y": 124, "tile_type": "chip" },
+
+        { "x1": 2,  "x2": 12, "y": 120, "tile_type": "solid" },
+
+        { "x1": 2,  "x2": 12, "y": 116, "tile_type": "solid" },
+        { "x1": 10, "x2": 20, "y": 112, "tile_type": "chip" },
+        { "x1": 18, "x2": 28, "y": 108, "tile_type": "solid", "sparks": true },
+        { "x1": 26, "x2": 36, "y": 104, "tile_type": "capacitor" },
+        { "x1": 34, "x2": 44, "y": 100, "tile_type": "solid" },
+
+        { "x1": 46, "x2": 56, "y": 86, "tile_type": "solid" },
+        { "x1": 44, "x2": 54, "y": 82, "tile_type": "chip", "sparks": true },
+        { "x1": 36, "x2": 46, "y": 78, "tile_type": "solid" },
+        { "x1": 28, "x2": 38, "y": 74, "tile_type": "capacitor" },
+        { "x1": 20, "x2": 30, "y": 70, "tile_type": "solid", "sparks": true },
+        { "x1": 12, "x2": 22, "y": 66, "tile_type": "chip" },
+        { "x1": 4,  "x2": 14, "y": 62, "tile_type": "solid" },
+
+        { "x1": 48, "x2": 58, "y": 58, "tile_type": "solid" },
+
+        { "x1": 46, "x2": 56, "y": 54, "tile_type": "chip" },
+        { "x1": 38, "x2": 48, "y": 50, "tile_type": "solid", "sparks": true },
+        { "x1": 30, "x2": 40, "y": 46, "tile_type": "capacitor" },
+        { "x1": 22, "x2": 32, "y": 42, "tile_type": "solid" },
+        { "x1": 14, "x2": 24, "y": 38, "tile_type": "chip", "sparks": true },
+        { "x1": 6,  "x2": 16, "y": 34, "tile_type": "solid" },
+
+        { "x1": 4,  "x2": 14, "y": 18, "tile_type": "solid" },
+        { "x1": 12, "x2": 24, "y": 14, "tile_type": "chip", "sparks": true },
+        { "x1": 20, "x2": 32, "y": 10, "tile_type": "solid" },
+        { "x1": 24, "x2": 38, "y": 8,  "tile_type": "capacitor" }
+    ],
+    "moving_platforms": [
+        { "x": 12, "y": 120, "width": 4, "tile_type": "solid",     "axis": "horizontal", "distance": 32, "speed": 5.0, "phase": 0.0 },
+        { "x": 45, "y": 90,  "width": 4, "tile_type": "chip",      "axis": "vertical",   "distance": 10, "speed": 2.5, "phase": 1.0 },
+        { "x": 14, "y": 58,  "width": 4, "tile_type": "solid",     "axis": "horizontal", "distance": 34, "speed": 5.0, "phase": 0.5 },
+        { "x": 4,  "y": 22,  "width": 4, "tile_type": "capacitor", "axis": "vertical",   "distance": 12, "speed": 2.5, "phase": 1.0 }
+    ],
+    "decorations": [
+        { "x1": 0, "x2": 60, "y": 4,   "tile_type": "trace" },
+        { "x1": 0, "x2": 60, "y": 24,  "tile_type": "trace" },
+        { "x1": 0, "x2": 60, "y": 48,  "tile_type": "trace" },
+        { "x1": 0, "x2": 60, "y": 92,  "tile_type": "trace" },
+        { "x1": 0, "x2": 60, "y": 122, "tile_type": "trace" }
+    ],
+    "bugs": [
+        { "x": 10, "y": 147, "facing": "right", "speed": 1.0 },
+        { "x": 25, "y": 147, "facing": "left",  "speed": 1.5, "ai": "jumper" },
+        { "x": 40, "y": 147, "facing": "right", "speed": 1.0 },
+        { "x": 52, "y": 147, "facing": "left",  "speed": 1.5 },
+
+        { "x": 22, "y": 135, "facing": "right", "speed": 1.0 },
+        { "x": 38, "y": 127, "facing": "left",  "speed": 1.5, "ai": "jumper" },
+
+        { "x": 6,  "y": 115, "facing": "right", "speed": 1.0 },
+        { "x": 30, "y": 103, "facing": "left",  "speed": 1.5, "ai": "jumper" },
+
+        { "x": 50, "y": 85, "facing": "left",  "speed": 1.0 },
+        { "x": 40, "y": 77, "facing": "right", "speed": 1.5, "ai": "jumper" },
+        { "x": 24, "y": 69, "facing": "left",  "speed": 1.5 },
+        { "x": 16, "y": 65, "facing": "right", "speed": 1.5, "ai": "jumper" },
+
+        { "x": 50, "y": 53, "facing": "right", "speed": 1.0 },
+        { "x": 34, "y": 45, "facing": "left",  "speed": 2.0, "ai": "jumper" },
+        { "x": 26, "y": 41, "facing": "right", "speed": 1.5 },
+
+        { "x": 16, "y": 13, "facing": "left",  "speed": 2.0, "ai": "jumper" },
+        { "x": 26, "y": 9,  "facing": "right", "speed": 1.5 }
+    ]
+}

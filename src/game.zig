@@ -175,7 +175,7 @@ pub const Game = struct {
             0 => .motherboard,
             1 => .cooling_bay,
             2 => .core_chamber,
-            3 => .motherboard, // silicon_ascent added in Phase 2
+            3 => .silicon_ascent,
             else => .motherboard,
         });
 

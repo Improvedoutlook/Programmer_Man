@@ -18,6 +18,7 @@ pub const BackgroundTheme = enum {
     motherboard,
     cooling_bay,
     core_chamber,
+    silicon_ascent, // Level 4 — vertical hardware climb
 };
 
 pub const Tilemap = struct {
@@ -194,6 +195,7 @@ pub const Tilemap = struct {
             .motherboard => self.renderMotherboardBackground(lw, lh),
             .cooling_bay => self.renderCoolingBayBackground(lw, lh),
             .core_chamber => self.renderCoreChamberBackground(lw, lh),
+            .silicon_ascent => self.renderSiliconAscentBackground(lw, lh),
         }
     }
 
@@ -549,6 +551,130 @@ pub const Tilemap = struct {
             const color = if (active) on_color else off_color;
             rl.drawRectangle(x + light * spacing, y, 8, 4, color);
         }
+    }
+
+    fn renderSiliconAscentBackground(self: *const Self, lw: i32, lh: i32) void {
+        const base_color = rl.Color{ .r = 12, .g = 18, .b = 30, .a = 255 };
+        const trace_color = rl.Color{ .r = 20, .g = 38, .b = 62, .a = 255 };
+        const node_color = rl.Color{ .r = 54, .g = 132, .b = 210, .a = 100 };
+        const accent_color = rl.Color{ .r = 70, .g = 194, .b = 255, .a = 255 };
+        const ram_body_color = rl.Color{ .r = 22, .g = 38, .b = 62, .a = 210 };
+
+        rl.drawRectangle(0, 0, lw, lh, base_color);
+
+        // Circuit mesh — tighter horizontal spacing than other themes to sell height
+        self.drawCircuitMesh(lw, lh, 120, 80, trace_color, node_color);
+
+        // Heatsink fin columns: groups of 4 tall thin fins spanning the full level height
+        var fin_x: i32 = 20;
+        while (fin_x < lw) : (fin_x += 116) {
+            const col_i = @divTrunc(fin_x - 20, 116);
+            var fin: i32 = 0;
+            while (fin < 4) : (fin += 1) {
+                const fx = fin_x + fin * 7;
+                const alpha: u8 = @intFromFloat(
+                    80.0 + (@sin(self.background_time * 1.2 +
+                        @as(f32, @floatFromInt(col_i)) * 0.9 +
+                        @as(f32, @floatFromInt(fin)) * 0.45) * 0.5 + 0.5) * 68.0,
+                );
+                rl.drawRectangle(fx, 0, 4, lh, rl.Color{ .r = 36, .g = 56, .b = 90, .a = alpha });
+            }
+        }
+
+        // Horizontal data buses repeating up the full level height
+        var bus_y: i32 = 60;
+        while (bus_y < lh) : (bus_y += 180) {
+            const phase: f32 = 0.2 + @as(f32, @floatFromInt(bus_y)) * 0.005;
+            self.drawDataBus(0, bus_y, lw, 6, phase,
+                rl.Color{ .r = 28, .g = 58, .b = 94, .a = 155 }, accent_color);
+        }
+
+        // RAM sticks and cooling fans, tiling vertically across the full level height
+        var tile_y: i32 = 0;
+        while (tile_y < lh) : (tile_y += 400) {
+            const ti = @divTrunc(tile_y, 400);
+            var col_x: i32 = 44 + @mod(ti, @as(i32, 2)) * 56;
+            while (col_x < lw) : (col_x += 220) {
+                const ci = @divTrunc(col_x - 44 - @mod(ti, @as(i32, 2)) * 56, 220);
+                const sy = tile_y + 24 + @mod(ci, @as(i32, 3)) * 72;
+                const phase: f32 = @as(f32, @floatFromInt(ti)) * 0.7 + @as(f32, @floatFromInt(ci)) * 1.4;
+
+                self.drawRamStick(col_x, sy, 18, 86, ram_body_color, accent_color, phase);
+                if (col_x + 24 < lw) {
+                    self.drawRamStick(col_x + 24, sy + 40, 18, 86, ram_body_color, accent_color, phase + 0.65);
+                }
+
+                if (col_x + 108 < lw and sy + 120 < lh) {
+                    self.drawCoolingFan(
+                        col_x + 108,
+                        sy + 80,
+                        20, 6,
+                        -2.5 - @as(f32, @floatFromInt(ci + ti)) * 0.4,
+                        rl.Color{ .r = 26, .g = 44, .b = 72, .a = 180 },
+                        rl.Color{ .r = 88, .g = 180, .b = 242, .a = 128 },
+                    );
+                }
+            }
+        }
+
+        // Board modules with DDR5 label, tiling vertically
+        var mod_y: i32 = 80;
+        while (mod_y < lh) : (mod_y += 340) {
+            const mi = @divTrunc(mod_y - 80, 340);
+            const mod_start_x = 110 + @mod(mi, @as(i32, 2)) * 44;
+            var mod_x: i32 = mod_start_x;
+            while (mod_x < lw - 88) : (mod_x += 268) {
+                const mxi = @divTrunc(mod_x - mod_start_x, 268);
+                self.drawBoardModule(
+                    mod_x, mod_y + @mod(mxi, @as(i32, 2)) * 48,
+                    92, 38, "DDR5",
+                    ram_body_color,
+                    accent_color,
+                    @as(f32, @floatFromInt(mi)) * 0.9 + @as(f32, @floatFromInt(mxi)) * 1.5,
+                );
+            }
+        }
+
+        // Processor sockets near the summit (low y values = top of the climb)
+        var sock_x: i32 = 72;
+        while (sock_x < lw) : (sock_x += 368) {
+            const si = @divTrunc(sock_x - 72, 368);
+            self.drawProcessorSocket(
+                sock_x,
+                44 + @mod(si, @as(i32, 2)) * 52,
+                130, 82, "SoC",
+                rl.Color{ .r = 18, .g = 32, .b = 54, .a = 220 },
+                rl.Color{ .r = 36, .g = 70, .b = 114, .a = 255 },
+                accent_color,
+                0.45 + @as(f32, @floatFromInt(si)) * 0.85,
+            );
+        }
+    }
+
+    // Vertical RAM stick module — signature element of the Silicon Ascent theme.
+    fn drawRamStick(self: *const Self, x: i32, y: i32, width: i32, height: i32, body_color: rl.Color, accent_color: rl.Color, phase: f32) void {
+        rl.drawRectangle(x, y, width, height, body_color);
+        rl.drawRectangleLines(x, y, width, height, rl.Color{
+            .r = accent_color.r, .g = accent_color.g, .b = accent_color.b, .a = 52,
+        });
+        // Gold edge connector fingers at bottom
+        var fx: i32 = x + 2;
+        while (fx < x + width - 2) : (fx += 5) {
+            rl.drawRectangle(fx, y + height - 6, 3, 6, rl.Color{ .r = 166, .g = 146, .b = 72, .a = 200 });
+        }
+        // Key notch cut-out
+        rl.drawRectangle(
+            x + @divTrunc(width, 2) - 2, y + height - 8, 4, 8,
+            rl.Color{ .r = 12, .g = 18, .b = 30, .a = 255 },
+        );
+        // Pulsing indicator on face
+        const pulse: u8 = @intFromFloat(
+            70.0 + (@sin(self.background_time * 2.8 + phase) * 0.5 + 0.5) * 95.0,
+        );
+        rl.drawCircle(
+            x + @divTrunc(width, 2), y + 18, 3,
+            rl.Color{ .r = accent_color.r, .g = accent_color.g, .b = accent_color.b, .a = pulse },
+        );
     }
 };
 

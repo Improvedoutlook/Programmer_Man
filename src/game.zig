@@ -93,7 +93,7 @@ pub const Game = struct {
     gamepad_name: ?[:0]const u8,
 
     const Self = @This();
-    const MAX_LEVELS: u8 = 3; // Total number of levels (Level 1 = index 0, Level 2 = index 1, Level 3 = index 2)
+    const MAX_LEVELS: u8 = 4; // Total number of levels (Level 1 = index 0, ..., Level 4 = index 3)
 
     pub fn init() Self {
         // Audio device is initialized in main.zig
@@ -175,6 +175,7 @@ pub const Game = struct {
             0 => .motherboard,
             1 => .cooling_bay,
             2 => .core_chamber,
+            3 => .motherboard, // silicon_ascent added in Phase 2
             else => .motherboard,
         });
 
@@ -226,6 +227,16 @@ pub const Game = struct {
                     self.terminal_pos = .{ .x = 6, .y = 28 };
                 }
             },
+            3 => {
+                if (tilemap_builder.loadLevelFromJson(&self.tilemap, "assets/data/level4.json")) |level_data| {
+                    self.applyLevelData(level_data, &spawn_x, &spawn_y);
+                } else |_| {
+                    tilemap_builder.createLevel1(&self.tilemap);
+                    self.spawnBugsLevel1();
+                    self.spawnSparksLevel1();
+                    self.terminal_pos = .{ .x = 6, .y = 28 };
+                }
+            },
             else => {
                 // Default fallback for any unknown level index
                 tilemap_builder.createLevel1(&self.tilemap);
@@ -242,6 +253,7 @@ pub const Game = struct {
                     0 => music.switchTrack("assets/music/lost_in_hyperspace.mp3"),
                     1 => music.switchTrack("assets/music/danger_streets.mp3"),
                     2 => music.switchTrack("assets/music/lone_fighter.mp3"),
+                    3 => music.switchTrack("assets/music/transmission.mp3"),
                     else => music.switchTrack("assets/music/lost_in_hyperspace.mp3"),
                 }
             }

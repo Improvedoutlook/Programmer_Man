@@ -70,6 +70,10 @@ pub const Player = struct {
     health: i32,
     invincible_timer: f32,
 
+    // Spawn point (tile coordinates) — updated per level so respawn returns here
+    spawn_tile_x: i32,
+    spawn_tile_y: i32,
+
     const Self = @This();
 
     pub fn init() Self {
@@ -92,13 +96,15 @@ pub const Player = struct {
             .score = 0,
             .health = 3,
             .invincible_timer = 0,
+            .spawn_tile_x = config.SPAWN_TILE_X,
+            .spawn_tile_y = config.SPAWN_TILE_Y,
         };
     }
 
     pub fn respawn(self: *Self) void {
-        // Position player with center at spawn tile X, feet on top of spawn tile Y
-        self.x = @as(f32, @floatFromInt(config.SPAWN_TILE_X * config.TILE_SIZE)) + config.PLAYER_WIDTH / 2;
-        self.y = @as(f32, @floatFromInt(config.SPAWN_TILE_Y * config.TILE_SIZE)); // Feet at top of ground tile
+        // Position player at the level's spawn point (set by loadLevel)
+        self.x = @as(f32, @floatFromInt(self.spawn_tile_x * config.TILE_SIZE)) + config.PLAYER_WIDTH / 2;
+        self.y = @as(f32, @floatFromInt(self.spawn_tile_y * config.TILE_SIZE));
         self.vx = 0;
         self.vy = 0;
         self.state = .idle;

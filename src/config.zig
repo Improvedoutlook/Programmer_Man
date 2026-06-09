@@ -63,7 +63,7 @@ pub const BG_CHIP_COUNT: usize = 8; // Number of decorative IC chips in backgrou
 
 // Level dimensions — compile-time maximums for array sizing
 pub const MAX_LEVEL_WIDTH: i32 = 200; // Max tiles wide (3200 px)
-pub const MAX_LEVEL_HEIGHT: i32 = TILES_Y; // Max tiles tall (matches screen height)
+pub const MAX_LEVEL_HEIGHT: i32 = 160; // Max tiles tall (2560 px) — supports tall vertical levels
 
 // Default level dimensions (used when no level data specifies otherwise)
 pub const DEFAULT_LEVEL_WIDTH: i32 = TILES_X; // 50 tiles — same as screen

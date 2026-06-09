@@ -392,18 +392,22 @@ pub const Game = struct {
             return;
         }
 
+        // Advance moving platforms first so their per-frame delta is current,
+        // then run player tile physics, then land/carry the player on top.
+        self.moving_platforms.update(dt);
+
         // Update player
         self.player.handleInput(input);
         self.player.update(dt, &self.tilemap);
+
+        // Land the player on / carry the player with any ridden moving platform
+        self.moving_platforms.resolvePlayer(&self.player);
 
         // Update enemies
         self.bugs.update(dt, &self.tilemap);
 
         // Update sparks
         self.sparks.update(dt);
-
-        // Update moving platforms (carry/collision is Phase 4)
-        self.moving_platforms.update(dt);
 
         // Update camera to follow player
         self.camera.follow(

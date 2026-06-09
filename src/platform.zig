@@ -8,6 +8,7 @@ const std = @import("std");
 const rl = @import("raylib");
 const config = @import("config.zig");
 const tilemap = @import("tilemap.zig");
+const Player = @import("player.zig").Player;
 const TileType = tilemap.TileType;
 const MovingPlatformSpawn = tilemap.MovingPlatformSpawn;
 const MAX_MOVING_PLATFORMS = tilemap.MAX_MOVING_PLATFORMS;
@@ -202,6 +203,51 @@ pub const MovingPlatformManager = struct {
     pub fn render(self: *const Self) void {
         for (0..self.count) |i| {
             self.platforms[i].render();
+        }
+    }
+
+    /// Resolve the player against all moving platforms after tile physics have run.
+    /// Lands the player on top of any platform they're falling onto and carries them
+    /// by that platform's per-frame delta (top-ride one-way collision).
+    ///
+    /// `player.y` is the feet position (center-bottom); `getRect` returns the
+    /// top-left, so `rect.y + rect.height == player.y`.
+    pub fn resolvePlayer(self: *Self, player: *Player) void {
+        const half_width = config.PLAYER_WIDTH / 2.0;
+
+        var i: usize = 0;
+        while (i < self.count) : (i += 1) {
+            const p = &self.platforms[i];
+            if (!p.active) continue;
+
+            const pr = player.getRect(); // player AABB (top-left + size)
+            const feet = pr.y + pr.height; // player's bottom edge (== player.y)
+            const plat = p.getRect();
+
+            const horizontally_overlapping =
+                pr.x < plat.x + plat.width and pr.x + pr.width > plat.x;
+
+            // Landing/standing tolerance: feet within a small band of the platform
+            // top, and the player is moving downward (or resting).
+            const landing = horizontally_overlapping and
+                player.vy >= 0 and
+                feet >= plat.y - 6 and feet <= plat.y + 8;
+
+            if (landing) {
+                // Snap feet to platform top (player.y is the feet position).
+                player.y = plat.y;
+                player.vy = 0;
+                player.on_ground = true;
+                // Carry: move with the platform this frame.
+                player.x += p.dx;
+                player.y += p.dy;
+            }
+        }
+
+        // Re-clamp to the level's left edge in case a horizontal carry pushed the
+        // player past it (right edge is handled by the platform travel authoring).
+        if (player.x < half_width) {
+            player.x = half_width;
         }
     }
 };

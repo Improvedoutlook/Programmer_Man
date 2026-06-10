@@ -313,7 +313,7 @@ pub const BugManager = struct {
         }
     }
 
-    pub fn checkPlayerCollision(self: *Self, player: *Player) void {
+    pub fn checkPlayerCollision(self: *Self, player: *Player, dt: f32) void {
         if (player.invincible_timer > 0) return;
 
         const player_rect = player.getRect();
@@ -325,10 +325,17 @@ pub const BugManager = struct {
             const bug_rect = bug.getRect();
 
             if (rl.checkCollisionRecs(player_rect, bug_rect)) {
-                // Check if player is stomping (falling and hitting from above)
+                // Check if player is stomping (falling and hitting from above).
                 const player_bottom = player_rect.y + player_rect.height;
                 const bug_top = bug_rect.y;
-                const is_stomping = player.vy > 0 and player_bottom <= bug_top + 8;
+                // Swept check: at high fall speeds the player can move further than
+                // the stomp window in a single frame, tunnelling past the bug's top
+                // so a stomp reads as a side hit. Reconstruct the previous foot
+                // position and treat it as a stomp if the feet were above the bug
+                // before this frame's descent, not only if they land in the window.
+                const prev_bottom = player_bottom - player.vy * dt;
+                const is_stomping = player.vy > 0 and
+                    (player_bottom <= bug_top + 8 or prev_bottom <= bug_top + 8);
 
                 if (is_stomping) {
                     // Stomp the bug!

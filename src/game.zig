@@ -432,7 +432,7 @@ pub const Game = struct {
         );
 
         // Check player-enemy collisions
-        self.bugs.checkPlayerCollision(&self.player);
+        self.bugs.checkPlayerCollision(&self.player, dt);
 
         // Check player-spark collisions
         self.sparks.checkPlayerCollision(&self.player);

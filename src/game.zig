@@ -277,6 +277,20 @@ pub const Game = struct {
         self.player.x = @as(f32, @floatFromInt(spawn_x * config.TILE_SIZE)) + config.PLAYER_WIDTH / 2;
         self.player.y = @as(f32, @floatFromInt(spawn_y * config.TILE_SIZE));
         self.state = .playing;
+
+        // Snap the camera onto the new spawn point. Without this, the camera
+        // keeps the previous level's position, and the very first frame after a
+        // level transition renders with a stale/out-of-bounds camera (the
+        // transition frame runs render() before updatePlaying re-clamps it).
+        // For a narrow level following a wide one (e.g. Level 3 -> Level 4) that
+        // stale x is past the new level's right edge, which made tilemap.render
+        // compute start_col > end_col and panic.
+        self.camera.follow(
+            self.player.x,
+            self.player.y - config.PLAYER_HEIGHT / 2.0,
+            self.tilemap.getLevelPixelWidth(),
+            self.tilemap.getLevelPixelHeight(),
+        );
     }
 
     fn applyLevelData(self: *Self, level_data: tilemap_builder.LevelData, spawn_x: *i32, spawn_y: *i32) void {

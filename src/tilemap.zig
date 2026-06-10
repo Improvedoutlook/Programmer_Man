@@ -128,6 +128,12 @@ pub const Tilemap = struct {
         const row0 = @max(@as(i32, 0), @as(i32, @intFromFloat(@floor(cam_y / ts))) - 1);
         const row1 = @min(self.level_height, @as(i32, @intFromFloat(@ceil((cam_y + vh) / ts))) + 1);
 
+        // If the camera is entirely outside the level (e.g. a stale camera on
+        // the first frame after a level transition), the visible range can be
+        // empty or inverted (col0 > col1). Bail out rather than letting the
+        // `start..end` ranges below underflow into an integer-overflow panic.
+        if (col1 <= col0 or row1 <= row0) return;
+
         const start_col: usize = @intCast(col0);
         const end_col: usize = @intCast(col1);
         const start_row: usize = @intCast(row0);

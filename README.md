@@ -17,8 +17,10 @@ Programmer_Man is a retro-style platformer where you play as a programmer naviga
 - **Classic platformer mechanics**: Run, jump, and stomp enemies
 - **Hardware-themed visuals**: PCB traces, chips, capacitors, and more
 - **Bug enemies**: Patrol-type enemies that can be defeated by jumping on them
+- **Moving platforms**: Horizontal and vertical platforms that carry the player
 - **Scoring system**: +100 points per bug stomped
 - **Lives system**: 3 lives with respawn on death
+- **Opening screen**: Animated title screen with music before the first level
 
 ## Controls
 
@@ -82,7 +84,7 @@ zig build run
 
 ✅ **Playable & Integrated**: Core gameplay systems are implemented and playable. Raylib rendering is integrated — tilemap, background, player sprite, and procedural enemy/tile rendering all work.  
 ✅ **Audio**: SFX and music playback are supported and asset files are included under `assets/audio/` and `assets/music/`.  
-✅ **Levels**: Three levels are provided as JSON (`assets/data/level1.json`, `assets/data/level2.json`, `assets/data/level3.json`) with a hardcoded fallback builder.
+✅ **Levels**: Four levels are provided as JSON (`level1.json`–`level4.json`) with a hardcoded fallback builder. Level 4 is "Silicon Ascent" — a vertical climb level.
 
 ### What's Implemented
 
@@ -92,45 +94,15 @@ zig build run
 - ✅ Stomp mechanic, bounce, and scoring (+100 per stomp)
 - ✅ Lives, health, respawn, and invincibility frames
 - ✅ HUD (score, lives, health/status, game over UI)
-- ✅ Level loading from JSON with a fallback builder
+- ✅ Level loading from JSON with a fallback builder (4 levels)
+- ✅ Moving platforms (horizontal & vertical, carry player, per-level phase offsets)
 - ✅ Hazards (falling sparks) and environmental interactions
-- ✅ Camera with render-to-texture scaling and window resizing support
+- ✅ Camera with render-to-texture scaling, window resizing, and world-bounds clamping
 - ✅ Graphics rendering (procedural tiles/enemies; player sprite support)
 - ✅ Audio playback (SFX and music streaming)
 - ✅ Parallax background and decorative elements
-- ✅ Game states (playing, paused, game over, victory/level-complete)
-- ✅ Input handling (keyboard mappings, pause, restart, enter to advance)
-
-## Getting Graphics Working
-
-### Option 1: Use raylib-zig Bindings (Recommended)
-
-```bash
-# Requires raylib-zig, a pure Zig wrapper for raylib
-# Will provide pre-built binaries for Windows
-```
-
-### Option 2: Build raylib from Source (MinGW)
-
-```bash
-# 1. Download raylib source
-git clone https://github.com/raysan5/raylib.git
-cd raylib/src
-
-# 2. Build with MinGW (compatible with Zig)
-make PLATFORM=PLATFORM_DESKTOP CC=gcc
-
-# 3. Copy the raylib/src/libraylib.a to your project
-cp libraylib.a ../../../tile-based-raylib-game/raylib/lib/
-```
-
-### Option 3: Alternative Graphics Libraries
-
-The game logic is completely independent of graphics. You can swap in:
-- **SDL2**: Mature, cross-platform
-- **mach-core**: Modern Zig game engine
-- **Pixel Perfect**: Lightweight Zig graphics
-- **GLFW + OpenGL**: Direct rendering
+- ✅ Game states (opening screen, playing, paused, game over, victory/level-complete)
+- ✅ Centralized input handling (`controls.zig`) — keyboard, XInput gamepad, and raw GLFW fallback for unmapped controllers
 
 ## Project Structure
 
@@ -142,9 +114,11 @@ tile-based-raylib-game/
 │   ├── main.zig        # Entry point, game loop
 │   ├── game.zig        # Game state management
 │   ├── config.zig      # Game constants
+│   ├── controls.zig    # Centralized input (keyboard, gamepad, raw GLFW fallback)
 │   ├── player.zig      # Player physics & rendering
 │   ├── enemy.zig       # Bug enemy AI
 │   ├── tilemap.zig     # Level tiles & collision
+│   ├── platform.zig    # Moving platform logic & player carry
 │   ├── hazards.zig     # Environmental hazards (sparks)
 │   ├── audio.zig       # Music + SFX playback
 │   ├── background.zig  # Parallax/background effects
@@ -154,6 +128,7 @@ tile-based-raylib-game/
 │   │   ├── level1.json
 │   │   ├── level2.json
 │   │   ├── level3.json
+│   │   ├── level4.json # "Silicon Ascent" — vertical climb level
 │   │   └── tileset.json
 │   ├── audio/
 │   │   ├── jump.wav
@@ -206,7 +181,7 @@ tile-based-raylib-game/
 ## Future Enhancements (Post Phase 1)
 
 - [ ] Expand sprite coverage and animations (enemies, tiles, VFX)
-- [ ] More levels with progressive difficulty (beyond the included 3)
+- [ ] More levels with progressive difficulty (beyond the included 4)
 - [ ] Power-ups (speedboost, shield, etc.)
 - [ ] Save/load system
 - [ ] High score tracking and leaderboards
@@ -214,7 +189,7 @@ tile-based-raylib-game/
 
 ## Code Statistics
 
-- **~2.9k lines** of pure Zig game code
+- **~4.3k lines** of pure Zig game code
 - **Zero external dependencies** (except graphics library)
 - **Full physics simulation** with proper collision
 - **Complete game loop** with state management
@@ -227,4 +202,4 @@ This project is licensed under the MIT License.
 
 ## Notes
 
-Graphics and audio are integrated; this repository contains a playable MVP focusing on core gameplay. Next work: art/animation polish, level design, balancing, and additional features listed above.
+Graphics, audio, moving platforms, and 4 complete levels are integrated. The game is fully playable end-to-end. Next work: art/animation polish, additional levels, balancing, and additional features listed above.

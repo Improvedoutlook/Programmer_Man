@@ -80,6 +80,53 @@ zig build
 zig build run
 ```
 
+### Web / Browser Build (WebAssembly)
+
+Programmer_Man can additionally be compiled to WebAssembly and played in a browser.
+This is an **additive** target — the native desktop build above is unchanged. See
+[`docs/PM_BroswerGamply.md`](docs/PM_BroswerGamply.md) for the full phased plan.
+
+> **Status:** **Phase 0 complete** — the toolchain is installed and the
+> Zig → raylib-zig → Emscripten chain is validated on this machine (a raylib sample
+> compiled to `index.html` + `.js` + `.wasm`). The project's own `build.zig` web
+> target is **Phase 1** (not yet wired), so `zig build` for web is not available yet.
+
+**Validated web toolchain:**
+
+| Component | Version / location |
+|-----------|--------------------|
+| Zig | `0.13.0` (do **not** upgrade past 0.13 without bumping raylib-zig — the pinned `emcc.zig` uses 0.13-era build API) |
+| raylib-zig | `v5.5` (already pinned in `build.zig.zon`; ships Emscripten support in `emcc.zig`) |
+| Emscripten SDK | `3.1.50`, installed at `C:\Users\HP\emsdk` |
+
+**One-time setup (Emscripten SDK):**
+
+```powershell
+git clone --depth 1 https://github.com/emscripten-core/emsdk.git C:\Users\HP\emsdk
+cd C:\Users\HP\emsdk
+.\emsdk.bat install 3.1.50
+.\emsdk.bat activate 3.1.50
+# verify:
+.\upstream\emscripten\emcc.bat --version   # -> emcc ... 3.1.50
+```
+
+**Web build command pattern** (becomes a `run-web` step in Phase 1). Web builds pass
+Emscripten's path to Zig via `--sysroot`:
+
+```powershell
+zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast `
+  --sysroot "C:\Users\HP\emsdk\upstream\emscripten" run-web
+```
+
+Output lands in `zig-out\htmlout\` (`index.html`, `.js`, `.wasm`, `.data`). Serve it
+over HTTP — e.g. `emrun zig-out\htmlout\index.html` or
+`python -m http.server` from that folder. Do **not** open via `file://` (the browser
+must `fetch()` the `.wasm`/`.data`).
+
+> The emcc link flags come from raylib-zig's `emcc.zig`:
+> `-sUSE_OFFSET_CONVERTER -sFULL-ES3=1 -sUSE_GLFW=3 -sASYNCIFY -O3`. The `-sASYNCIFY`
+> flag is what lets the existing blocking main loop run in the browser unchanged.
+
 ## Current Status
 
 ✅ **Playable & Integrated**: Core gameplay systems are implemented and playable. Raylib rendering is integrated — tilemap, background, player sprite, and procedural enemy/tile rendering all work.  

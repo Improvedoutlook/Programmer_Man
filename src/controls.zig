@@ -356,6 +356,14 @@ test "pause prompt stays keyboard friendly without controller" {
     try std.testing.expectEqualStrings("P or ESC", getActionPrompt(.pause, false));
 }
 
+/// True if any keyboard key or gamepad button was pressed this frame.
+/// Used by "press any button to continue" screens (e.g. credits).
+pub fn isAnyInputPressed() bool {
+    // getKeyPressed() returns KeyboardKey.null (0) when the queue is empty.
+    if (@intFromEnum(rl.getKeyPressed()) != 0) return true;
+    return isAnyGamepadButtonPressed();
+}
+
 pub fn isAnyGamepadButtonPressed() bool {
     var gamepad_index: i32 = 0;
     while (gamepad_index < config.MAX_GAMEPADS) : (gamepad_index += 1) {

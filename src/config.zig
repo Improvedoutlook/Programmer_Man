@@ -82,3 +82,6 @@ pub const JUMPER_JUMP_VELOCITY: f32 = -250.0; // pixels/second (negative = upwar
 // Audio settings
 pub const MUSIC_VOLUME: f32 = 0.5;
 pub const SFX_VOLUME: f32 = 0.7;
+
+// Credits screen
+pub const CREDITS_SCROLL_SPEED: f32 = 20.0; // pixels/second — slow, chill, reflective pace

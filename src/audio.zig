@@ -321,6 +321,54 @@ pub const VictoryMusic = struct {
 };
 
 // ============================================================================
+// CreditsMusic - End credits track player
+// ============================================================================
+
+pub const CreditsMusic = struct {
+    music: rl.Music,
+    is_playing: bool,
+
+    const Self = @This();
+
+    pub fn init() !Self {
+        const music = try rl.loadMusicStream("assets/music/a_hero_is_born.mp3");
+
+        return Self{
+            .music = music,
+            .is_playing = false,
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.stop();
+        rl.unloadMusicStream(self.music);
+    }
+
+    pub fn play(self: *Self) void {
+        rl.setMusicVolume(self.music, config.MUSIC_VOLUME);
+        rl.playMusicStream(self.music);
+        self.is_playing = true;
+    }
+
+    pub fn update(self: *Self) void {
+        if (self.is_playing) {
+            rl.updateMusicStream(self.music);
+            // Loop the track while the credits roll
+            if (!rl.isMusicStreamPlaying(self.music)) {
+                rl.playMusicStream(self.music);
+            }
+        }
+    }
+
+    pub fn stop(self: *Self) void {
+        if (self.is_playing) {
+            rl.stopMusicStream(self.music);
+            self.is_playing = false;
+        }
+    }
+};
+
+// ============================================================================
 // GameOverMusic - Game over track player
 // ============================================================================
 

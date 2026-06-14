@@ -20,6 +20,7 @@ pub const GameState = enum {
     paused,
     game_over,
     victory,
+    credits,
 };
 
 pub const Camera = struct {
@@ -73,6 +74,79 @@ pub const Camera = struct {
     }
 };
 
+/// A single line of scrolling credits text.
+const CreditLine = struct {
+    text: [:0]const u8,
+    size: i32,
+    color: rl.Color,
+};
+
+const credit_title = rl.Color{ .r = 100, .g = 180, .b = 255, .a = 255 }; // Programmer blue
+const credit_body = rl.Color{ .r = 0, .g = 255, .b = 128, .a = 255 }; // Terminal green
+const credit_dim = rl.Color{ .r = 150, .g = 150, .b = 160, .a = 255 }; // Muted grey (URLs)
+const credit_track = rl.Color{ .r = 230, .g = 200, .b = 120, .a = 255 }; // Warm gold (track titles)
+
+/// The end-credits roll. Scrolls from the bottom of the screen to the top.
+const credit_lines = [_]CreditLine{
+    .{ .text = "PROGRAMMER_MAN", .size = 48, .color = credit_title },
+    .{ .text = "", .size = 80, .color = credit_body },
+    .{ .text = "Thank You", .size = 40, .color = credit_body },
+    .{ .text = "", .size = 40, .color = credit_body },
+
+    .{ .text = "To the creators of Zig", .size = 28, .color = credit_body },
+    .{ .text = "and the creators of Raylib", .size = 28, .color = credit_body },
+    .{ .text = "for the tools that made this game possible", .size = 22, .color = credit_body },
+    .{ .text = "", .size = 40, .color = credit_body },
+
+    .{ .text = "To everyone who loves playing games", .size = 28, .color = credit_body },
+    .{ .text = "and to everyone who creates them", .size = 28, .color = credit_body },
+    .{ .text = "for others to enjoy", .size = 28, .color = credit_body },
+    .{ .text = "", .size = 40, .color = credit_body },
+
+    .{ .text = "A special thanks for the amazing 8-bit music", .size = 26, .color = credit_title },
+    .{ .text = "found on OpenGameArt", .size = 22, .color = credit_body },
+    .{ .text = "https://opengameart.org/", .size = 18, .color = credit_dim },
+    .{ .text = "", .size = 28, .color = credit_body },
+
+    .{ .text = "shiru8bit  -  Alex Semenov", .size = 24, .color = credit_body },
+    .{ .text = "https://shiru.untergrund.net/", .size = 18, .color = credit_dim },
+    .{ .text = "Lost In Hyperspace", .size = 20, .color = credit_track },
+    .{ .text = "Lone Fighter", .size = 20, .color = credit_track },
+    .{ .text = "Transmission", .size = 20, .color = credit_track },
+    .{ .text = "Danger Streets", .size = 20, .color = credit_track },
+    .{ .text = "Snowball Game", .size = 20, .color = credit_track },
+    .{ .text = "", .size = 24, .color = credit_body },
+
+    .{ .text = "request", .size = 24, .color = credit_body },
+    .{ .text = "http://request.moe/", .size = 18, .color = credit_dim },
+    .{ .text = "Their Spears Fell Like Rain", .size = 20, .color = credit_track },
+    .{ .text = "", .size = 24, .color = credit_body },
+
+    .{ .text = "quantumelle  -  Jordan Trudgett", .size = 24, .color = credit_body },
+    .{ .text = "A Hero Is Born", .size = 20, .color = credit_track },
+    .{ .text = "", .size = 50, .color = credit_body },
+
+    .{ .text = "And finally...", .size = 28, .color = credit_body },
+
+    // A full screen of blank space so every earlier line scrolls away and the
+    // closing line rises into view — and comes to rest — entirely on its own.
+    .{ .text = "", .size = config.SCREEN_HEIGHT, .color = credit_body },
+
+    .{ .text = "Thanks for playing!", .size = 44, .color = credit_title },
+};
+
+/// Vertical advance between consecutive lines (pixels of padding added to size).
+const CREDIT_LINE_PADDING: i32 = 16;
+
+/// Total pixel height of the whole credits block (computed at comptime).
+const credits_block_height: f32 = blk: {
+    var h: f32 = 0;
+    for (credit_lines) |line| {
+        h += @floatFromInt(line.size + CREDIT_LINE_PADDING);
+    }
+    break :blk h;
+};
+
 pub const Game = struct {
     player: Player,
     tilemap: Tilemap,
@@ -86,6 +160,8 @@ pub const Game = struct {
     victory_music: ?audio.VictoryMusic,
     game_over_music: ?audio.GameOverMusic,
     opening_music: ?audio.OpeningMusic,
+    credits_music: ?audio.CreditsMusic,
+    credits_scroll: f32,
     all_bugs_defeated: bool,
     terminal_pos: ?struct { x: i32, y: i32 },
     player_texture: ?rl.Texture2D,
@@ -107,6 +183,7 @@ pub const Game = struct {
         const victory_music_player: ?audio.VictoryMusic = audio.VictoryMusic.init() catch null;
         const game_over_music_player: ?audio.GameOverMusic = audio.GameOverMusic.init() catch null;
         const opening_music_player: ?audio.OpeningMusic = audio.OpeningMusic.init() catch null;
+        const credits_music_player: ?audio.CreditsMusic = audio.CreditsMusic.init() catch null;
 
         const player_texture = rl.loadTexture("assets/sprites/player.png") catch null;
         const opening_texture = rl.loadTexture("assets/Images/PM_OpeningImage.png") catch null;
@@ -124,6 +201,8 @@ pub const Game = struct {
             .victory_music = victory_music_player,
             .game_over_music = game_over_music_player,
             .opening_music = opening_music_player,
+            .credits_music = credits_music_player,
+            .credits_scroll = 0,
             .opening_texture = opening_texture,
             .all_bugs_defeated = false,
             .terminal_pos = null,
@@ -152,6 +231,9 @@ pub const Game = struct {
         }
         if (self.opening_music) |*opening_music| {
             opening_music.deinit();
+        }
+        if (self.credits_music) |*credits_music| {
+            credits_music.deinit();
         }
         if (self.opening_texture) |tex| {
             rl.unloadTexture(tex);
@@ -354,6 +436,19 @@ pub const Game = struct {
     }
 
     pub fn update(self: *Self, dt: f32) void {
+        // DEBUG PREVIEW: press F12 to jump straight to the end-credits roll.
+        // Temporary aid for previewing the credits without a full playthrough.
+        if (rl.isKeyPressed(.f12) and self.state != .credits) {
+            if (self.music) |*m| m.stop();
+            if (self.victory_music) |*m| m.stop();
+            if (self.opening_music) |*m| m.stop();
+            if (self.game_over_music) |*m| m.stop();
+            if (self.credits_music) |*cm| cm.play();
+            self.credits_scroll = 0;
+            self.game_complete = true;
+            self.state = .credits;
+        }
+
         self.tilemap.updateBackground(dt);
         const input = controls.poll();
         self.has_gamepad = input.has_gamepad;
@@ -379,12 +474,18 @@ pub const Game = struct {
             opening_music.update();
         }
 
+        // Update credits music stream
+        if (self.credits_music) |*credits_music| {
+            credits_music.update();
+        }
+
         switch (self.state) {
             .opening => self.updateOpening(input),
             .playing => self.updatePlaying(dt, input),
             .paused => self.updatePaused(input),
             .game_over => self.updateGameOver(input),
             .victory => self.updateVictory(input),
+            .credits => self.updateCredits(dt, input),
         }
     }
 
@@ -506,16 +607,17 @@ pub const Game = struct {
 
     fn updateVictory(self: *Self, input: controls.FrameInput) void {
         if (self.game_complete) {
-            // Final victory — press R to restart from Level 1 with fresh stats
-            if (input.restart_pressed) {
+            // Final victory — once the victory fanfare has played, any button
+            // rolls the end credits.
+            if (controls.isAnyInputPressed()) {
                 if (self.victory_music) |*victory_music| {
                     victory_music.stop();
                 }
-                self.game_complete = false;
-                // Reset score and lives for a fresh start
-                self.player.score = 0;
-                self.player.lives = config.INITIAL_LIVES;
-                self.loadLevel(0);
+                if (self.credits_music) |*credits_music| {
+                    credits_music.play();
+                }
+                self.credits_scroll = 0;
+                self.state = .credits;
             }
         } else {
             // Level complete — press Enter to advance to next level
@@ -530,7 +632,48 @@ pub const Game = struct {
         }
     }
 
+    /// Highest scroll value — credits stop here so the final lines rest on
+    /// screen rather than disappearing off the top.
+    fn creditsMaxScroll() f32 {
+        const last = credit_lines[credit_lines.len - 1];
+        const last_h: f32 = @floatFromInt(last.size + CREDIT_LINE_PADDING);
+        const screen_h: f32 = @floatFromInt(config.SCREEN_HEIGHT);
+        const rest_y: f32 = screen_h * 0.45; // Final line settles ~45% down
+        return screen_h - rest_y + (credits_block_height - last_h);
+    }
+
+    fn updateCredits(self: *Self, dt: f32, input: controls.FrameInput) void {
+        // Scroll the credits upward until the final line settles into place.
+        const max_scroll = creditsMaxScroll();
+        if (self.credits_scroll < max_scroll) {
+            self.credits_scroll += config.CREDITS_SCROLL_SPEED * dt;
+            if (self.credits_scroll > max_scroll) self.credits_scroll = max_scroll;
+        }
+
+        // Once the roll has finished, return to the opening screen — same
+        // music and image the player sees when first starting the game.
+        if (self.credits_scroll >= max_scroll and input.restart_pressed) {
+            if (self.credits_music) |*credits_music| {
+                credits_music.stop();
+            }
+            self.game_complete = false;
+            self.credits_scroll = 0;
+            self.current_level = 0;
+            self.player.score = 0;
+            self.player.lives = config.INITIAL_LIVES;
+            self.state = .opening;
+            if (self.opening_music) |*opening_music| {
+                opening_music.play();
+            }
+        }
+    }
+
     pub fn render(self: *Self) void {
+        if (self.state == .credits) {
+            self.renderCredits();
+            return;
+        }
+
         if (self.state == .opening) {
             rl.clearBackground(rl.Color.black);
             if (self.opening_texture) |tex| {
@@ -650,12 +793,10 @@ pub const Game = struct {
             const score_text = std.fmt.bufPrintZ(&score_buf, "Final Score: {d}", .{self.player.score}) catch "Final Score: ???";
             rl.drawText(score_text, config.SCREEN_WIDTH / 2 - 80, config.SCREEN_HEIGHT / 2 + 25, 24, config.HUD_COLOR);
 
-            var restart_buf: [96]u8 = undefined;
-            const restart_prompt = controls.getActionPrompt(.restart, self.has_gamepad);
-            const restart_text = std.fmt.bufPrintZ(&restart_buf, "Press {s} to Restart", .{restart_prompt}) catch "Press R to Restart";
-            const restart_text_width = rl.measureText(restart_text, 20);
-            const restart_x: i32 = @divTrunc(config.SCREEN_WIDTH - restart_text_width, 2);
-            rl.drawText(restart_text, restart_x, config.SCREEN_HEIGHT / 2 + 65, 20, config.HUD_COLOR);
+            const credits_text = "Press any button for the credits";
+            const credits_text_width = rl.measureText(credits_text, 20);
+            const credits_x: i32 = @divTrunc(config.SCREEN_WIDTH - credits_text_width, 2);
+            rl.drawText(credits_text, credits_x, config.SCREEN_HEIGHT / 2 + 65, 20, config.HUD_COLOR);
         } else {
             // Level complete — more levels ahead
             // Show which level was completed (current_level is 0-indexed, display as 1-indexed)
@@ -679,6 +820,42 @@ pub const Game = struct {
             const continue_text_width = rl.measureText(continue_text, 20);
             const continue_x: i32 = @divTrunc(config.SCREEN_WIDTH - continue_text_width, 2);
             rl.drawText(continue_text, continue_x, config.SCREEN_HEIGHT / 2 + 30, 20, config.HUD_COLOR);
+        }
+    }
+
+    fn renderCredits(self: *Self) void {
+        rl.clearBackground(rl.Color.black);
+
+        // First line's top starts just below the screen, then rises as the
+        // scroll value grows.
+        var cursor_y: f32 = @as(f32, @floatFromInt(config.SCREEN_HEIGHT)) - self.credits_scroll;
+
+        for (credit_lines) |line| {
+            const line_h: f32 = @floatFromInt(line.size + CREDIT_LINE_PADDING);
+
+            // Only draw lines that fall within (or just outside) the viewport.
+            if (line.text.len > 0 and cursor_y > -line_h and cursor_y < @as(f32, @floatFromInt(config.SCREEN_HEIGHT))) {
+                const text_width = rl.measureText(line.text, line.size);
+                const x = @divTrunc(config.SCREEN_WIDTH - text_width, 2);
+                rl.drawText(line.text, x, @intFromFloat(cursor_y), line.size, line.color);
+            }
+
+            cursor_y += line_h;
+        }
+
+        // Once the roll has settled, show a gentle flashing restart prompt.
+        if (self.credits_scroll >= creditsMaxScroll()) {
+            var prompt_buf: [96]u8 = undefined;
+            const restart_prompt = controls.getActionPrompt(.restart, self.has_gamepad);
+            const prompt = std.fmt.bufPrintZ(&prompt_buf, "Press {s} to play again", .{restart_prompt}) catch "Press R to play again";
+            const prompt_width = rl.measureText(prompt, 18);
+            const prompt_x: i32 = @divTrunc(config.SCREEN_WIDTH - prompt_width, 2);
+
+            const time = @as(f32, @floatCast(rl.getTime()));
+            const alpha = @as(u8, @intFromFloat(127.0 + 127.0 * @sin(time * 4.0)));
+            var prompt_color = config.HUD_COLOR;
+            prompt_color.a = alpha;
+            rl.drawText(prompt, prompt_x, config.SCREEN_HEIGHT - 40, 18, prompt_color);
         }
     }
 

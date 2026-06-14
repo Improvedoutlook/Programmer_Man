@@ -1,4 +1,5 @@
 const std = @import("std");
+const rlz = @import("raylib_zig"); // exposes rlz.emcc (Emscripten helpers)
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -11,6 +12,41 @@ pub fn build(b: *std.Build) void {
 
     const raylib = raylib_dep.module("raylib");
     const raylib_artifact = raylib_dep.artifact("raylib");
+
+    // Web target: compile the same source to wasm32-emscripten and link with
+    // emcc. Build-system only — no game-code changes. Isolated in this branch so
+    // the native path below is untouched (see PM_BrowserGameplay.md, Phase 1).
+    if (target.result.os.tag == .emscripten) {
+        const exe_lib = rlz.emcc.compileForEmscripten(
+            b,
+            "programmer_man",
+            "src/main.zig",
+            target,
+            optimize,
+        ) catch @panic("emcc compileForEmscripten failed");
+        exe_lib.root_module.addImport("raylib", raylib);
+        // raylib isn't baked into exe_lib's output, so emcc links it too.
+        exe_lib.linkLibrary(raylib_artifact);
+
+        const link = rlz.emcc.linkWithEmscripten(
+            b,
+            &[_]*std.Build.Step.Compile{ exe_lib, raylib_artifact },
+        ) catch @panic("emcc linkWithEmscripten failed");
+
+        // Package the whole assets/ tree as an async sidecar mounted at /assets
+        // so runtime std.fs reads (e.g. levelN.json) resolve unchanged.
+        link.addArg("--preload-file");
+        link.addArg("assets@/assets");
+        // Phase 5 adds: link.addArg("--shell-file"); link.addArg("web/shell.html");
+
+        b.getInstallStep().dependOn(&link.step);
+
+        const run = rlz.emcc.emscriptenRunStep(b) catch @panic("emcc emscriptenRunStep failed");
+        run.step.dependOn(&link.step);
+        b.step("run-web", "Build & serve the web build via emrun")
+            .dependOn(&run.step);
+        return; // skip native-only test_exe / unit-test wiring for the web target
+    }
 
     const exe = b.addExecutable(.{
         .name = "programmer_man",

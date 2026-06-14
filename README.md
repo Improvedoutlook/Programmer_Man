@@ -86,10 +86,12 @@ Programmer_Man can additionally be compiled to WebAssembly and played in a brows
 This is an **additive** target — the native desktop build above is unchanged. See
 [`docs/PM_BroswerGamply.md`](docs/PM_BroswerGamply.md) for the full phased plan.
 
-> **Status:** **Phase 0 complete** — the toolchain is installed and the
-> Zig → raylib-zig → Emscripten chain is validated on this machine (a raylib sample
-> compiled to `index.html` + `.js` + `.wasm`). The project's own `build.zig` web
-> target is **Phase 1** (not yet wired), so `zig build` for web is not available yet.
+> **Status:** **Phase 1 complete** — `build.zig` now has a `wasm32-emscripten`
+> branch and a `run-web` step. The project's own source compiles end-to-end to
+> `zig-out\htmlout\{index.html, .js, .wasm, .data}` (assets preloaded via
+> `--preload-file assets@/assets`). The native desktop build is unchanged. Note:
+> Phase 2 (case-sensitive asset-path fixes, incl. the player sprite) is still
+> pending, so some assets may not yet load in-browser.
 
 **Validated web toolchain:**
 
@@ -110,12 +112,20 @@ cd C:\Users\HP\emsdk
 .\upstream\emscripten\emcc.bat --version   # -> emcc ... 3.1.50
 ```
 
-**Web build command pattern** (becomes a `run-web` step in Phase 1). Web builds pass
-Emscripten's path to Zig via `--sysroot`:
+**Web build command.** Web builds pass Emscripten's path to Zig via `--sysroot`.
+Use the `run-web` step to build and serve via `emrun` in one shot:
 
 ```powershell
 zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast `
   --sysroot "C:\Users\HP\emsdk\upstream\emscripten" run-web
+```
+
+To build the artifacts **without** launching a server, drop the `run-web` step
+(the default install step produces them):
+
+```powershell
+zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast `
+  --sysroot "C:\Users\HP\emsdk\upstream\emscripten"
 ```
 
 Output lands in `zig-out\htmlout\` (`index.html`, `.js`, `.wasm`, `.data`). Serve it

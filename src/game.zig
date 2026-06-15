@@ -186,7 +186,7 @@ pub const Game = struct {
         const credits_music_player: ?audio.CreditsMusic = audio.CreditsMusic.init() catch null;
 
         const player_texture = rl.loadTexture("assets/sprites/player.png") catch null;
-        const opening_texture = rl.loadTexture("assets/Images/PM_OpeningImage.png") catch null;
+        const opening_texture = rl.loadTexture("assets/images/PM_OpeningImage.png") catch null;
 
         var game = Self{
             .player = Player.init(),

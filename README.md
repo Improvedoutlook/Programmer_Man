@@ -8,9 +8,9 @@ Programmer_Man is a retro-style platformer where you play as a programmer naviga
 
 ## Screenshots
 
-![Opening Screen](assets/Images/PM_OpeningImage.png)
+![Opening Screen](assets/images/PM_OpeningImage.png)
 
-![Gameplay](assets/Images/Screenshot.png)
+![Gameplay](assets/images/Screenshot.png)
 
 ## Features
 
@@ -195,7 +195,7 @@ tile-based-raylib-game/
 │   │   ├── lost_in_hyperspace.mp3
 │   │   ├── danger_streets.mp3
 │   │   └── lone_fighter.mp3
-│   └── Sprites/
+│   └── sprites/
 │       └── player.png
 └── docs/
     └── PRD.md          # Product Requirements

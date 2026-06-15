@@ -22,8 +22,8 @@ The goal is to implement an opening screen that displays immediately when **Prog
 
 ### Assets Included:
 1. **Opening Image**:
-   - File Path: [PM_OpeningImage.png](file:///C:/Programmer_Man/tile-based-raylib-game/assets/Images/PM_OpeningImage.png)
-   - Location: `assets/Images/PM_OpeningImage.png`
+   - File Path: [PM_OpeningImage.png](file:///C:/Programmer_Man/tile-based-raylib-game/assets/images/PM_OpeningImage.png)
+   - Location: `assets/images/PM_OpeningImage.png`
 2. **Opening Music**:
    - File Path: [their_spears_fell_like_rain_full.ogg](file:///C:/Programmer_Man/tile-based-raylib-game/assets/music/their_spears_fell_like_rain_full.ogg)
    - Location: `assets/music/their_spears_fell_like_rain_full.ogg`

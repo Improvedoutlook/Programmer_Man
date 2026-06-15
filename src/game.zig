@@ -2,6 +2,7 @@
 //! Game module - Main game state management and coordination
 
 const std = @import("std");
+const builtin = @import("builtin");
 const rl = @import("raylib");
 const config = @import("config.zig");
 const controls = @import("controls.zig");
@@ -169,6 +170,11 @@ pub const Game = struct {
     game_complete: bool,
     has_gamepad: bool,
     gamepad_name: ?[:0]const u8,
+    /// Web autoplay gate: browsers mute all audio until the first user gesture,
+    /// so on emscripten we hold off starting the opening track until then. On
+    /// native there is no such restriction, so audio is armed from the start
+    /// and behaviour is unchanged. (PM_BrowserGameplay.md Phase 4.)
+    audio_armed: bool,
 
     const Self = @This();
     const MAX_LEVELS: u8 = 4; // Total number of levels (Level 1 = index 0, ..., Level 4 = index 3)
@@ -210,10 +216,17 @@ pub const Game = struct {
             .game_complete = false,
             .has_gamepad = false,
             .gamepad_name = null,
+            // Native: armed immediately (no autoplay restriction). Web: wait
+            // for the first user gesture before starting any track.
+            .audio_armed = builtin.target.os.tag != .emscripten,
         };
 
-        if (game.opening_music) |*m| {
-            m.play();
+        // Only start the opening track now if audio is already armed (native).
+        // On web, armAudio() starts it on the first input gesture instead.
+        if (game.audio_armed) {
+            if (game.opening_music) |*m| {
+                m.play();
+            }
         }
 
         return game;
@@ -435,7 +448,27 @@ pub const Game = struct {
         self.sparks.addSpawnPoint(44.0 * ts, (17.0 * ts) + spark_offset); // Platform 5
     }
 
+    /// Web audio-unlock gate. On the first user gesture (mouse/key/gamepad) we
+    /// mark audio as armed and start the track for whatever screen we're on. In
+    /// practice the gesture always lands on the opening screen, since every
+    /// later screen transition is itself driven by input (a gesture) and starts
+    /// its own track. The same gesture also unlocks the browser's WebAudio
+    /// context, so playback is audible from here on (SFX included).
+    fn armAudio(self: *Self) void {
+        self.audio_armed = true;
+        switch (self.state) {
+            .opening => if (self.opening_music) |*m| m.play(),
+            else => {},
+        }
+    }
+
     pub fn update(self: *Self, dt: f32) void {
+        // Hold off starting audio on web until the player's first interaction
+        // (see armAudio / audio_armed). On native this is already true at init.
+        if (!self.audio_armed and controls.isAudioUnlockGesture()) {
+            self.armAudio();
+        }
+
         // DEBUG PREVIEW: press F12 to jump straight to the end-credits roll.
         // Temporary aid for previewing the credits without a full playthrough.
         if (rl.isKeyPressed(.f12) and self.state != .credits) {

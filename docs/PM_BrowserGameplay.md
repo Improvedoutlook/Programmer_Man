@@ -289,7 +289,20 @@ opening screen in-browser and the main loop runs.
 
 ---
 
-## 8. Phase 4 — Audio Unlock (Browser Gesture)
+## 8. Phase 4 — Audio Unlock (Browser Gesture) ✅ COMPLETE (2026-06-14)
+
+**Outcome:** The only track that started before any user gesture was the opening
+track, played from `Game.init`. It is now gated behind a new `audio_armed` flag on
+`Game`: on native the flag is `true` at init (`builtin.target.os.tag != .emscripten`)
+so desktop behaviour is byte-for-byte unchanged; on web it starts `false` and
+`Game.update` arms it on the first input via the new
+`controls.isAudioUnlockGesture()` (mouse button, key, or gamepad button — the same
+event that unlocks the browser's WebAudio context). `armAudio()` then starts the
+opening track. Every later track (per-level music, game-over, victory, credits) was
+already started in response to input, so those need no change; SFX likewise become
+audible once the context is unlocked. `updateMusicStream` calls stay in the loop
+untouched. Native (`zig build`) and web (`-Dtarget=wasm32-emscripten`) both build
+clean (exit 0) and regenerate `zig-out/htmlout/{index.html,.js,.wasm,.data}`.
 
 **Goal:** Make music and SFX actually play, respecting autoplay policy.
 
@@ -435,7 +448,7 @@ The architecture already favors this, and this PRD preserves it:
 | 1 | `build.zig` web target | Add `.emscripten` branch + `run-web` step | No (build only) | ✅ Done |
 | 2 | Asset portability | Fix case-sensitive paths (player sprite!) | Paths only | ✅ Done |
 | 3 | Portability guards | Compile-clean for wasm; platform guards | Minor | ✅ Done |
-| 4 | Audio unlock | Gesture-gated audio start | Minor | — |
+| 4 | Audio unlock | Gesture-gated audio start | Minor | ✅ Done |
 | 5 | Web shell & hosting | Custom HTML shell, deploy layout | No (web assets) | — |
 | 6 | Optimize & harden | Size, ASYNCIFY, audio payload | Optional | — |
 | — | Expansion safety | Levels manifest (recommended) | Optional refactor | — |

@@ -364,6 +364,17 @@ pub fn isAnyInputPressed() bool {
     return isAnyGamepadButtonPressed();
 }
 
+/// True if the user produced any input this frame that a browser accepts as a
+/// gesture to unlock its WebAudio context (mouse button, keyboard key, or
+/// gamepad button). Used by the web audio-unlock gate
+/// (PM_BrowserGameplay.md Phase 4). A mouse click is the most likely first
+/// gesture on a web page, so it is checked explicitly here in addition to the
+/// key/gamepad coverage from isAnyInputPressed().
+pub fn isAudioUnlockGesture() bool {
+    if (rl.isMouseButtonPressed(.left) or rl.isMouseButtonPressed(.right)) return true;
+    return isAnyInputPressed();
+}
+
 pub fn isAnyGamepadButtonPressed() bool {
     var gamepad_index: i32 = 0;
     while (gamepad_index < config.MAX_GAMEPADS) : (gamepad_index += 1) {

@@ -2,6 +2,7 @@
 //! Main entry point and game loop
 
 const std = @import("std");
+const builtin = @import("builtin");
 const rl = @import("raylib");
 
 const Game = @import("game.zig").Game;
@@ -10,8 +11,11 @@ const config = @import("config.zig");
 const controls = @import("controls.zig");
 
 pub fn main() !void {
-    // Enable window resizing BEFORE creating window
-    if (config.WINDOW_RESIZABLE) {
+    // Enable window resizing BEFORE creating window.
+    // Native only: on web the <canvas> size is owned by the HTML shell + CSS
+    // (see PM_BrowserGameplay.md Phase 5), so raylib must not also drive window
+    // resizing. We keep a fixed 800x600 framebuffer on web and let CSS scale it.
+    if (builtin.target.os.tag != .emscripten and config.WINDOW_RESIZABLE) {
         const flags: rl.ConfigFlags = @bitCast(@as(u32, 0x00000004));
         rl.setConfigFlags(flags);
     }
@@ -113,7 +117,12 @@ pub fn main() !void {
         rl.endDrawing();
     }
 
-    // Ensure clean exit - explicitly flush any pending operations
+    // Ensure clean exit - explicitly flush any pending operations.
+    // Note (web): under -sASYNCIFY the browser owns the event loop and
+    // windowShouldClose() never returns true, so this point is never reached on
+    // emscripten and the deinit/closeWindow defers above do not run. That is
+    // cosmetic only (the tab just closes) — do NOT put gameplay-critical logic
+    // after the loop, or it will silently never execute on the web build.
 }
 
 /// Calculates the scale factor to fit the game into the window while maintaining aspect ratio

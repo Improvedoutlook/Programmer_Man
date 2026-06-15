@@ -84,14 +84,18 @@ zig build run
 
 Programmer_Man can additionally be compiled to WebAssembly and played in a browser.
 This is an **additive** target — the native desktop build above is unchanged. See
-[`docs/PM_BroswerGamply.md`](docs/PM_BroswerGamply.md) for the full phased plan.
+[`docs/PM_BrowserGameplay.md`](docs/PM_BrowserGameplay.md) for the full phased plan.
 
-> **Status:** **Phase 1 complete** — `build.zig` now has a `wasm32-emscripten`
-> branch and a `run-web` step. The project's own source compiles end-to-end to
+> **Status:** **Phases 1–3 complete.** `build.zig` has a `wasm32-emscripten`
+> branch and a `run-web` step; the source compiles end-to-end to
 > `zig-out\htmlout\{index.html, .js, .wasm, .data}` (assets preloaded via
-> `--preload-file assets@/assets`). The native desktop build is unchanged. Note:
-> Phase 2 (case-sensitive asset-path fixes, incl. the player sprite) is still
-> pending, so some assets may not yet load in-browser.
+> `--preload-file assets@/assets`). Phase 2 fixed the case-sensitive asset paths
+> (incl. the player sprite). Phase 3 confirmed a clean `wasm32-emscripten`
+> compile and added runtime portability guards: the `WINDOW_RESIZABLE` config
+> flag is now native-only (the web canvas is sized by the HTML shell/CSS in a
+> later phase), and post-loop cleanup is documented as not running under
+> `-sASYNCIFY`. The native desktop build is unchanged. Remaining: Phase 4 (audio
+> unlock on gesture) and Phase 5 (custom HTML shell / hosting).
 
 **Validated web toolchain:**
 

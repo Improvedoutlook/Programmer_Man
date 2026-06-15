@@ -5,6 +5,19 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Web builds need Emscripten's sysroot (passed via --sysroot). The
+    // raylib_zig dependency dereferences b.sysroot while configuring its own
+    // emscripten examples, so a missing --sysroot otherwise panics deep inside
+    // the dependency with an opaque "attempt to use null value". Fail early here
+    // with an actionable message instead. See README "Web / Browser Build".
+    if (target.result.os.tag == .emscripten and b.sysroot == null) {
+        @panic(
+            "Web build requires --sysroot. Re-run as ONE line (no backtick continuation):\n" ++
+                "  zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast " ++
+                "--sysroot \"C:\\Users\\HP\\emsdk\\upstream\\emscripten\" run-web\n",
+        );
+    }
+
     const raylib_dep = b.dependency("raylib_zig", .{
         .target = target,
         .optimize = optimize,
@@ -37,6 +50,17 @@ pub fn build(b: *std.Build) void {
         // so runtime std.fs reads (e.g. levelN.json) resolve unchanged.
         link.addArg("--preload-file");
         link.addArg("assets@/assets");
+
+        // Emscripten 3.1.50 defaults to a 64 KB stack and a fixed heap with no
+        // growth. The Game struct embeds a ~32 KB tilemap (200x160 TileType
+        // array) plus the bug/spark/platform managers, and Game.init() builds
+        // it and returns it by value up through main (Tilemap.initDefault()
+        // also returns a 32 KB struct by value). That overflows the 64 KB
+        // stack during init and traps as "memory access out of bounds" right
+        // after the SFX load. Native stacks (~8 MB) hide this. Give the web
+        // build a generous stack and let the heap grow.
+        link.addArg("-sSTACK_SIZE=4MB");
+        link.addArg("-sALLOW_MEMORY_GROWTH=1");
         // Phase 5 adds: link.addArg("--shell-file"); link.addArg("web/shell.html");
 
         b.getInstallStep().dependOn(&link.step);

@@ -254,7 +254,17 @@ no filesystem errors in the browser console.
 
 ---
 
-## 7. Phase 3 — Compile & Runtime Portability Guards
+## 7. Phase 3 — Compile & Runtime Portability Guards ✅ COMPLETE (2026-06-14)
+
+**Outcome:** `wasm32-emscripten` already compiled cleanly (exit 0) — the triage
+found no native-only constructs to fix: `std.heap.page_allocator` and
+`std.fs.cwd().openFile` in `tilemap.zig` are valid on emscripten (MEMFS), and
+`std.time.milliTimestamp()` in `background.zig` is backed by emscripten libc. No
+threads / `std.process` usage exists. Two defensive guards were added in
+`main.zig`: (1) the `WINDOW_RESIZABLE` config flag is now gated behind
+`builtin.target.os.tag != .emscripten` so raylib doesn't fight the HTML shell for
+canvas sizing on web; (2) a comment documents that post-loop cleanup never runs
+under `-sASYNCIFY` (cosmetic). Native (`zig build`) and web builds both pass.
 
 **Goal:** Resolve anything that compiles natively but breaks under
 `wasm32-emscripten`.
@@ -422,9 +432,9 @@ The architecture already favors this, and this PRD preserves it:
 | Phase | Title | Scope | Touches game code? | Status |
 |-------|-------|-------|--------------------|--------|
 | 0 | Toolchain & baseline | Install emsdk, validate chain on a sample | No | ✅ Done |
-| 1 | `build.zig` web target | Add `.emscripten` branch + `run-web` step | No (build only) | Next |
-| 2 | Asset portability | Fix case-sensitive paths (player sprite!) | Paths only | — |
-| 3 | Portability guards | Compile-clean for wasm; platform guards | Minor | — |
+| 1 | `build.zig` web target | Add `.emscripten` branch + `run-web` step | No (build only) | ✅ Done |
+| 2 | Asset portability | Fix case-sensitive paths (player sprite!) | Paths only | ✅ Done |
+| 3 | Portability guards | Compile-clean for wasm; platform guards | Minor | ✅ Done |
 | 4 | Audio unlock | Gesture-gated audio start | Minor | — |
 | 5 | Web shell & hosting | Custom HTML shell, deploy layout | No (web assets) | — |
 | 6 | Optimize & harden | Size, ASYNCIFY, audio payload | Optional | — |

@@ -174,18 +174,25 @@
           canvas.focus();
         }
 
-        // Reveal the start button and auto-dismiss after 1 s so the canvas
-        // appears even if the user misses the button.  The game handles its
-        // own WebAudio unlock via armAudio() on the first keypress/click.
+        // Reveal the start button and wait for the player to click it. The
+        // overlay is the real start gate: the game holds its opening track until
+        // the click (the game polls window.Module.pmStarted, set below). We must
+        // NOT auto-dismiss — clicking the button is the user gesture that resumes
+        // miniaudio's suspended AudioContext (via its document-level listener),
+        // so without a real click the music would never become audible.
         function showStart() {
           if (!runtimeReady) return;
           statusEl.textContent = "Ready";
           setProgress(100);
           startButton.style.display = "inline-block";
-          setTimeout(dismiss, 1000);
         }
 
-        startButton.addEventListener("click", dismiss);
+        startButton.addEventListener("click", function () {
+          // Tell the wasm side the player has started so it arms WebAudio and
+          // begins the opening track. The click itself resumes the AudioContext.
+          if (window.Module) window.Module.pmStarted = true;
+          dismiss();
+        });
 
         // Keep keyboard input flowing to the game without scrolling the page.
         window.addEventListener(

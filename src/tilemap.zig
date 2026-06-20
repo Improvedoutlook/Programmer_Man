@@ -591,8 +591,7 @@ pub const Tilemap = struct {
         var bus_y: i32 = 60;
         while (bus_y < lh) : (bus_y += 180) {
             const phase: f32 = 0.2 + @as(f32, @floatFromInt(bus_y)) * 0.005;
-            self.drawDataBus(0, bus_y, lw, 6, phase,
-                rl.Color{ .r = 28, .g = 58, .b = 94, .a = 155 }, accent_color);
+            self.drawDataBus(0, bus_y, lw, 6, phase, rl.Color{ .r = 28, .g = 58, .b = 94, .a = 155 }, accent_color);
         }
 
         // RAM sticks and cooling fans, tiling vertically across the full level height
@@ -614,7 +613,8 @@ pub const Tilemap = struct {
                     self.drawCoolingFan(
                         col_x + 108,
                         sy + 80,
-                        20, 6,
+                        20,
+                        6,
                         -2.5 - @as(f32, @floatFromInt(ci + ti)) * 0.4,
                         rl.Color{ .r = 26, .g = 44, .b = 72, .a = 180 },
                         rl.Color{ .r = 88, .g = 180, .b = 242, .a = 128 },
@@ -632,8 +632,11 @@ pub const Tilemap = struct {
             while (mod_x < lw - 88) : (mod_x += 268) {
                 const mxi = @divTrunc(mod_x - mod_start_x, 268);
                 self.drawBoardModule(
-                    mod_x, mod_y + @mod(mxi, @as(i32, 2)) * 48,
-                    92, 38, "DDR5",
+                    mod_x,
+                    mod_y + @mod(mxi, @as(i32, 2)) * 48,
+                    92,
+                    38,
+                    "DDR5",
                     ram_body_color,
                     accent_color,
                     @as(f32, @floatFromInt(mi)) * 0.9 + @as(f32, @floatFromInt(mxi)) * 1.5,
@@ -648,7 +651,9 @@ pub const Tilemap = struct {
             self.drawProcessorSocket(
                 sock_x,
                 44 + @mod(si, @as(i32, 2)) * 52,
-                130, 82, "SoC",
+                130,
+                82,
+                "SoC",
                 rl.Color{ .r = 18, .g = 32, .b = 54, .a = 220 },
                 rl.Color{ .r = 36, .g = 70, .b = 114, .a = 255 },
                 accent_color,
@@ -661,7 +666,10 @@ pub const Tilemap = struct {
     fn drawRamStick(self: *const Self, x: i32, y: i32, width: i32, height: i32, body_color: rl.Color, accent_color: rl.Color, phase: f32) void {
         rl.drawRectangle(x, y, width, height, body_color);
         rl.drawRectangleLines(x, y, width, height, rl.Color{
-            .r = accent_color.r, .g = accent_color.g, .b = accent_color.b, .a = 52,
+            .r = accent_color.r,
+            .g = accent_color.g,
+            .b = accent_color.b,
+            .a = 52,
         });
         // Gold edge connector fingers at bottom
         var fx: i32 = x + 2;
@@ -670,7 +678,10 @@ pub const Tilemap = struct {
         }
         // Key notch cut-out
         rl.drawRectangle(
-            x + @divTrunc(width, 2) - 2, y + height - 8, 4, 8,
+            x + @divTrunc(width, 2) - 2,
+            y + height - 8,
+            4,
+            8,
             rl.Color{ .r = 12, .g = 18, .b = 30, .a = 255 },
         );
         // Pulsing indicator on face
@@ -678,7 +689,9 @@ pub const Tilemap = struct {
             70.0 + (@sin(self.background_time * 2.8 + phase) * 0.5 + 0.5) * 95.0,
         );
         rl.drawCircle(
-            x + @divTrunc(width, 2), y + 18, 3,
+            x + @divTrunc(width, 2),
+            y + 18,
+            3,
             rl.Color{ .r = accent_color.r, .g = accent_color.g, .b = accent_color.b, .a = pulse },
         );
     }
@@ -796,12 +809,25 @@ pub fn loadLevelFromJson(tilemap: *Tilemap, path: []const u8) !LevelData {
     // Read JSON file from disk (relative to CWD / project root)
     const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
-    const json_bytes = try file.readToEndAlloc(std.heap.page_allocator, 128 * 1024);
-    defer std.heap.page_allocator.free(json_bytes);
+
+    // IMPORTANT: do not use std.heap.page_allocator here. On wasm/emscripten it
+    // is WasmPageAllocator, which obtains memory only via @wasmMemoryGrow
+    // (memory.grow). The web build pins the heap with ALLOW_MEMORY_GROWTH=0 (see
+    // build.zig — required to stop audio/ASYNCIFY "detached ArrayBuffer" crashes),
+    // so every page_allocator request fails with OutOfMemory and every level
+    // silently falls back to createLevel1. A FixedBufferAllocator draws from
+    // existing memory instead — no growth, no libc dependency — and works the
+    // same on native and web. The level JSON files are a few KB; 256 KB covers
+    // the raw bytes (capped at 128 KB below) plus the std.json parse tree.
+    var fba_buf: [256 * 1024]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&fba_buf);
+    const alloc = fba.allocator();
+
+    const json_bytes = try file.readToEndAlloc(alloc, 128 * 1024);
 
     var parsed = try std.json.parseFromSlice(
         JsonLevelSchema,
-        std.heap.page_allocator,
+        alloc,
         json_bytes,
         .{ .ignore_unknown_fields = true },
     );

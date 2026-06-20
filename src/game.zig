@@ -15,6 +15,19 @@ const SparkManager = @import("hazards.zig").SparkManager;
 const MovingPlatformManager = @import("platform.zig").MovingPlatformManager;
 const audio = @import("audio.zig");
 
+// Web only: the custom shell's "Click to Start" button sets window.Module.pmStarted
+// (see web/shell.html). raylib only sees input that lands on the <canvas>, so a
+// click on that HTML overlay button never registers as an in-game gesture. Poll
+// the JS flag via emscripten's script eval so the button arms audio and starts
+// the game exactly like a canvas gesture would. The dead branch — and therefore
+// this extern symbol — is comptime-eliminated on native builds.
+extern fn emscripten_run_script_int(script: [*:0]const u8) c_int;
+
+fn webStartPressed() bool {
+    if (builtin.target.os.tag != .emscripten) return false;
+    return emscripten_run_script_int("(window.Module&&window.Module.pmStarted)?1:0") != 0;
+}
+
 pub const GameState = enum {
     opening,
     playing,
@@ -463,9 +476,11 @@ pub const Game = struct {
     }
 
     pub fn update(self: *Self, dt: f32) void {
-        // Hold off starting audio on web until the player's first interaction
-        // (see armAudio / audio_armed). On native this is already true at init.
-        if (!self.audio_armed and controls.isAudioUnlockGesture()) {
+        // Hold off starting audio on web until the player starts the game: either
+        // by clicking the shell's "Click to Start" button (webStartPressed) or by
+        // any input that lands on the canvas (isAudioUnlockGesture). On native
+        // audio_armed is already true at init, so this is a no-op.
+        if (!self.audio_armed and (webStartPressed() or controls.isAudioUnlockGesture())) {
             self.armAudio();
         }
 

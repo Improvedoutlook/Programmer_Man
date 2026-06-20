@@ -325,7 +325,23 @@ console autoplay warnings blocking gameplay.
 
 ---
 
-## 9. Phase 5 — Web Presentation Shell & Hosting
+## 9. Phase 5 — Web Presentation Shell & Hosting ✅ COMPLETE (2026-06-14)
+
+**Outcome:** Added `web/shell.html` and linked it as the emcc `--shell-file` in
+`build.zig`'s emscripten branch (replacing the placeholder comment). The shell
+provides: a centered, aspect-ratio-locked (`800/600`) `<canvas id="canvas">` that
+CSS scales from the fixed framebuffer with `image-rendering: pixelated` (crisp
+nearest-neighbor, matching `main.zig`'s `.point` filter); a loading/progress bar
+driven by `Module.setStatus` + `Module.monitorRunDependencies` (parses
+emscripten's `(done/total)` status text); a **Click to Start** button that
+supplies the WebAudio-unlock gesture and focuses the canvas so the title screen's
+first keypress arms audio (Phase 4); and page chrome (title + controls legend).
+emcc substitutes `{{{ SCRIPT }}}` with its loader and minifies the page in
+release (generated `index.html` ~3.8 KB). Verified: `wasm32-emscripten` build
+exits 0 and regenerates `zig-out/htmlout/{index.html,.js,.wasm,.data}` with the
+custom shell content present and the `{{{ SCRIPT }}}` token substituted; native
+`zig build` still exits 0. README documents the shell, local HTTP serving, and
+the static-host deploy layout (`.wasm` MIME / co-located files).
 
 **Goal:** Replace emcc's bare default page with a polished, embeddable shell, and
 define the publish layout.
@@ -449,6 +465,6 @@ The architecture already favors this, and this PRD preserves it:
 | 2 | Asset portability | Fix case-sensitive paths (player sprite!) | Paths only | ✅ Done |
 | 3 | Portability guards | Compile-clean for wasm; platform guards | Minor | ✅ Done |
 | 4 | Audio unlock | Gesture-gated audio start | Minor | ✅ Done |
-| 5 | Web shell & hosting | Custom HTML shell, deploy layout | No (web assets) | — |
+| 5 | Web shell & hosting | Custom HTML shell, deploy layout | No (web assets) | ✅ Done |
 | 6 | Optimize & harden | Size, ASYNCIFY, audio payload | Optional | — |
 | — | Expansion safety | Levels manifest (recommended) | Optional refactor | — |

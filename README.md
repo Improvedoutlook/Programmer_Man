@@ -86,16 +86,18 @@ Programmer_Man can additionally be compiled to WebAssembly and played in a brows
 This is an **additive** target — the native desktop build above is unchanged. See
 [`docs/PM_BrowserGameplay.md`](docs/PM_BrowserGameplay.md) for the full phased plan.
 
-> **Status:** **Phases 1–3 complete.** `build.zig` has a `wasm32-emscripten`
+> **Status:** **Phases 1–5 complete.** `build.zig` has a `wasm32-emscripten`
 > branch and a `run-web` step; the source compiles end-to-end to
 > `zig-out\htmlout\{index.html, .js, .wasm, .data}` (assets preloaded via
 > `--preload-file assets@/assets`). Phase 2 fixed the case-sensitive asset paths
 > (incl. the player sprite). Phase 3 confirmed a clean `wasm32-emscripten`
 > compile and added runtime portability guards: the `WINDOW_RESIZABLE` config
-> flag is now native-only (the web canvas is sized by the HTML shell/CSS in a
-> later phase), and post-loop cleanup is documented as not running under
-> `-sASYNCIFY`. The native desktop build is unchanged. Remaining: Phase 4 (audio
-> unlock on gesture) and Phase 5 (custom HTML shell / hosting).
+> flag is now native-only (the web canvas is sized by the HTML shell/CSS), and
+> post-loop cleanup is documented as not running under `-sASYNCIFY`. Phase 4
+> gates audio start behind the first input gesture (browser autoplay policy).
+> Phase 5 adds a custom presentation shell (`web/shell.html`) with a loading bar,
+> click-to-start gesture, and controls legend, plus the deploy layout below. The
+> native desktop build is unchanged.
 
 **Validated web toolchain:**
 
@@ -140,6 +142,39 @@ must `fetch()` the `.wasm`/`.data`).
 > The emcc link flags come from raylib-zig's `emcc.zig`:
 > `-sUSE_OFFSET_CONVERTER -sFULL-ES3=1 -sUSE_GLFW=3 -sASYNCIFY -O3`. The `-sASYNCIFY`
 > flag is what lets the existing blocking main loop run in the browser unchanged.
+
+**Presentation shell.** The build links `web/shell.html` as the emcc
+`--shell-file`, so the generated `index.html` is a polished page rather than
+emcc's bare default: a centered, aspect-ratio-locked `<canvas>` that CSS scales
+from the game's fixed 800×600 framebuffer (crisp nearest-neighbor filtering), a
+loading/progress bar driven by Emscripten's `Module.setStatus` /
+`monitorRunDependencies`, a **Click to Start** button that supplies the user
+gesture browsers require to unlock WebAudio (the title screen then arms audio on
+the first key — see Phase 4), and a controls legend. Edit `web/shell.html` to
+restyle the page; no game-code rebuild logic depends on it.
+
+**Local test.** Always serve over HTTP — the browser must `fetch()` the
+`.wasm`/`.data`, so `file://` will not work:
+
+```powershell
+# one-shot build + serve:
+zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast `
+  --sysroot "C:\Users\HP\emsdk\upstream\emscripten" run-web
+# or serve an already-built folder:
+cd zig-out\htmlout; python -m http.server 8080   # then open http://localhost:8080
+```
+
+**Deploying (static hosting).** The artifact is the whole `zig-out\htmlout\`
+folder (`index.html`, `index.js`, `index.wasm`, `index.data`). Copy those four
+files to any static host:
+
+- **GitHub Pages / Netlify / itch.io:** upload the folder as-is. GitHub Pages and
+  itch.io already serve `.wasm` as `application/wasm` and `.data` as a binary
+  octet-stream, which is all that's required.
+- **Other hosts:** ensure `.wasm` is served with `Content-Type: application/wasm`
+  (some older servers send `text/html` and the browser refuses to compile it).
+  All four files must sit in the same directory — `index.js` fetches
+  `index.wasm` and `index.data` by relative name.
 
 ## Current Status
 

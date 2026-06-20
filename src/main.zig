@@ -31,20 +31,18 @@ pub fn main() !void {
     rl.setTargetFPS(60);
     controls.init();
 
-    // Create render texture for fixed internal resolution
-    // This is the key to resizable windows: we always render the game at 800x600,
-    // then scale that texture to fit whatever size window the user has
-    const render_target = try rl.loadRenderTexture(config.GAME_WIDTH, config.GAME_HEIGHT);
-    defer rl.unloadRenderTexture(render_target);
+    // On web the CSS inside shell.html already scales the 800×600 <canvas> to
+    // fill the #stage div, so we don't need an intermediate render texture.
+    // On native we still render to an FBO first so the game can be scaled to
+    // any window size with letterboxing.
+    const is_web = builtin.target.os.tag == .emscripten;
 
-    // Try option 1 (most common):
-    // rl.setTextureFilter(render_target.texture, .filter_point);
-
-    // If that fails, try option 2:
-    rl.setTextureFilter(render_target.texture, .point);
-
-    // // If that fails, try option 3:
-    // rl.setTextureFilter(render_target.texture, .nearest);
+    const render_target = if (!is_web)
+        try rl.loadRenderTexture(config.GAME_WIDTH, config.GAME_HEIGHT)
+    else
+        undefined;
+    defer if (!is_web) rl.unloadRenderTexture(render_target);
+    if (!is_web) rl.setTextureFilter(render_target.texture, .point);
 
     // Initialize game state
     var game = Game.init();
@@ -64,57 +62,46 @@ pub fn main() !void {
 
         // === UPDATE (all game logic at fixed 800x600 resolution) ===
         game.update(dt);
-        background.update(dt); // ← ADD THIS! Updates particles and animations
+        background.update(dt);
 
         // === RENDER ===
-        // Step 1: Render game to fixed-size texture (always 800x600)
-        rl.beginTextureMode(render_target);
-        {
+        if (is_web) {
+            // Web: draw directly to the canvas — CSS handles scaling to fit the
+            // browser window, so the FBO intermediate step is not needed.
+            rl.beginDrawing();
             rl.clearBackground(config.BACKGROUND_COLOR);
-
-            // Render background effects first (behind everything)
-            background.render(game.getCameraWorldX()); // Parallax background
-
-            // Render game on top of background
+            background.render(game.getCameraWorldX());
             game.render();
-        }
-        rl.endTextureMode();
+            rl.endDrawing();
+        } else {
+            // Native: render to a fixed 800×600 FBO, then scale+letterbox to
+            // fit whatever size window the user has opened.
+            rl.beginTextureMode(render_target);
+            rl.clearBackground(config.BACKGROUND_COLOR);
+            background.render(game.getCameraWorldX());
+            game.render();
+            rl.endTextureMode();
 
-        // Step 2: Calculate how to scale the 800x600 game to fit the current window
-        const window_width = rl.getScreenWidth();
-        const window_height = rl.getScreenHeight();
+            const window_width = rl.getScreenWidth();
+            const window_height = rl.getScreenHeight();
+            const scale = calculateScale(config.GAME_WIDTH, config.GAME_HEIGHT, window_width, window_height);
+            const scaled_width: f32 = @as(f32, @floatFromInt(config.GAME_WIDTH)) * scale;
+            const scaled_height: f32 = @as(f32, @floatFromInt(config.GAME_HEIGHT)) * scale;
+            const offset_x: f32 = (@as(f32, @floatFromInt(window_width)) - scaled_width) / 2.0;
+            const offset_y: f32 = (@as(f32, @floatFromInt(window_height)) - scaled_height) / 2.0;
 
-        const scale = calculateScale(config.GAME_WIDTH, config.GAME_HEIGHT, window_width, window_height);
-
-        // Calculate dimensions and position to center the scaled game
-        const scaled_width: f32 = @as(f32, @floatFromInt(config.GAME_WIDTH)) * scale;
-        const scaled_height: f32 = @as(f32, @floatFromInt(config.GAME_HEIGHT)) * scale;
-        const offset_x: f32 = (@as(f32, @floatFromInt(window_width)) - scaled_width) / 2.0;
-        const offset_y: f32 = (@as(f32, @floatFromInt(window_height)) - scaled_height) / 2.0;
-
-        // Step 3: Draw the scaled texture to the actual window
-        rl.beginDrawing();
-        {
-            // Black letterbox bars if window aspect ratio doesn't match game
+            rl.beginDrawing();
             rl.clearBackground(rl.Color.black);
-
-            const source = rl.Rectangle{
-                .x = 0,
-                .y = 0,
-                .width = @floatFromInt(config.GAME_WIDTH),
-                .height = @floatFromInt(-config.GAME_HEIGHT),
-            };
-
-            const dest = rl.Rectangle{
-                .x = offset_x,
-                .y = offset_y,
-                .width = scaled_width,
-                .height = scaled_height,
-            };
-
-            rl.drawTexturePro(render_target.texture, source, dest, rl.Vector2{ .x = 0, .y = 0 }, 0, rl.Color.white);
+            rl.drawTexturePro(
+                render_target.texture,
+                rl.Rectangle{ .x = 0, .y = 0, .width = @floatFromInt(config.GAME_WIDTH), .height = @floatFromInt(-config.GAME_HEIGHT) },
+                rl.Rectangle{ .x = offset_x, .y = offset_y, .width = scaled_width, .height = scaled_height },
+                rl.Vector2{ .x = 0, .y = 0 },
+                0,
+                rl.Color.white,
+            );
+            rl.endDrawing();
         }
-        rl.endDrawing();
     }
 
     // Ensure clean exit - explicitly flush any pending operations.

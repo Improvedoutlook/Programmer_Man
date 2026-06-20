@@ -60,8 +60,42 @@ pub fn build(b: *std.Build) void {
         // after the SFX load. Native stacks (~8 MB) hide this. Give the web
         // build a generous stack and let the heap grow.
         link.addArg("-sSTACK_SIZE=4MB");
-        link.addArg("-sALLOW_MEMORY_GROWTH=1");
-        // Phase 5 adds: link.addArg("--shell-file"); link.addArg("web/shell.html");
+        // CRITICAL: the WASM heap must NEVER grow during a session. A growth
+        // event replaces the underlying ArrayBuffer, which detaches every cached
+        // typed-array view and crashes two subsystems for the rest of the run:
+        //   1. miniaudio ScriptProcessorNode: captures HEAPF32 at setup; after a
+        //      buffer swap every onaudioprocess throws "detached ArrayBuffer" —
+        //      audio is permanently dead.
+        //   2. ASYNCIFY doRewind: _emscripten_memcpy_js closes over HEAPU8 from
+        //      module-load time; a swap makes copyWithin throw on the next rewind.
+        // The previous config set a big INITIAL_MEMORY but left ALLOW_MEMORY_GROWTH=1
+        // (with a 2 GB ceiling). That only RAISED the growth threshold — it didn't
+        // remove it. A late allocation (the 5-track LoadMusicStream sequence + the
+        // state transition on Enter) still pushed past 256 MB, fired grow(), and
+        // hit both bugs above.  Pinning the heap to a fixed size makes grow()
+        // impossible, so the buffer address is stable for the whole session.
+        //
+        // 512 MB fixed covers stack (4 MB) + MEMFS preloaded assets (~26 MB) +
+        // all music streams resident in RAM + textures (~6 MB) + game heap +
+        // ASYNCIFY stack, with headroom. If the build ever aborts with OOM, the
+        // real culprit is an allocation that keeps growing (suspect: music streams
+        // reloaded on transitions without UnloadMusicStream) — fix that leak
+        // rather than just raising this number.
+        link.addArg("-sINITIAL_MEMORY=536870912");
+        link.addArg("-sALLOW_MEMORY_GROWTH=0");
+        // Pre-allocate a generous ASYNCIFY save-stack so it never calls realloc
+        // and triggers a secondary sbrk/memory.grow mid-session.  The playing
+        // state's render path (tilemap + mode2D + HUD) is much deeper than the
+        // opening screen and easily exceeds the 4096-byte default.
+        link.addArg("-sASYNCIFY_STACK_SIZE=65536");
+
+        // Custom presentation shell (Phase 5): centered responsive canvas, a
+        // loading/progress bar wired to Module.setStatus/monitorRunDependencies,
+        // a click-to-start gesture surface (also unlocks WebAudio, see Phase 4),
+        // and page chrome (title + controls legend). Replaces emcc's bare
+        // default index.html. emcc substitutes {{{ SCRIPT }}} with its loader.
+        link.addArg("--shell-file");
+        link.addArg(b.pathFromRoot("web/shell.html"));
 
         b.getInstallStep().dependOn(&link.step);
 

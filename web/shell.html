@@ -1,0 +1,258 @@
+<!doctype html>
+<!--
+  Programmer_Man — custom Emscripten shell (PM_BrowserGameplay.md, Phase 5).
+
+  emcc substitutes {{{ SCRIPT }}} with the generated loader <script> at build
+  time (build.zig passes this file via --shell-file). The runtime fills the
+  progress bar through Module.setStatus / Module.monitorRunDependencies, the
+  same hooks the stock emscripten shell uses. The game renders to a fixed
+  800x600 framebuffer (see config.zig); CSS scales the <canvas> to fit while
+  preserving aspect ratio.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Programmer_Man</title>
+    <style>
+      :root {
+        --bg: #0b0f1a;
+        --panel: #121829;
+        --accent: #4ad6c4;
+        --accent-dim: #2a6f68;
+        --text: #d7e0f0;
+        --muted: #7e8aa6;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: 16px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.4rem;
+        letter-spacing: 0.04em;
+        font-weight: 600;
+      }
+      h1 .accent { color: var(--accent); }
+
+      /* Stage holds the canvas plus overlays, sized to the game aspect ratio. */
+      #stage {
+        position: relative;
+        width: min(90vw, 80vh * (800 / 600), 800px);
+        aspect-ratio: 800 / 600;
+        background: #000;
+        border: 1px solid #1e2740;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+      }
+      /* The game owns its internal 800x600 framebuffer; we just scale it. */
+      canvas#canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        image-rendering: pixelated;        /* crisp nearest-neighbor scaling */
+        image-rendering: crisp-edges;
+        background: #000;
+        outline: none;
+      }
+
+      /* Loading + click-to-start overlay (doubles as the audio-unlock gesture,
+         see PM_BrowserGameplay.md Phase 4). */
+      #overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: rgba(11, 15, 26, 0.92);
+        text-align: center;
+        padding: 24px;
+        transition: opacity 0.25s ease;
+      }
+      #overlay.hidden { opacity: 0; pointer-events: none; }
+
+      #status { color: var(--muted); font-size: 0.95rem; min-height: 1.2em; }
+
+      #progress-track {
+        width: 60%;
+        max-width: 320px;
+        height: 8px;
+        background: #1e2740;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      #progress-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+        transition: width 0.15s ease;
+      }
+
+      #start-button {
+        display: none;            /* shown once the runtime is ready */
+        cursor: pointer;
+        border: 1px solid var(--accent);
+        background: transparent;
+        color: var(--accent);
+        font: inherit;
+        font-size: 1.1rem;
+        letter-spacing: 0.05em;
+        padding: 12px 28px;
+        border-radius: 6px;
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+      #start-button:hover { background: var(--accent); color: var(--bg); }
+
+      #legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 18px;
+        justify-content: center;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      #legend b { color: var(--text); font-weight: 600; }
+      a { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <h1>Programmer<span class="accent">_</span>Man</h1>
+
+    <div id="stage">
+      <!-- raylib/GLFW on emscripten binds to the element with id="canvas". -->
+      <canvas
+        id="canvas"
+        oncontextmenu="event.preventDefault()"
+        tabindex="-1"
+      ></canvas>
+
+      <div id="overlay">
+        <div id="status">Loading…</div>
+        <div id="progress-track"><div id="progress-bar"></div></div>
+        <button id="start-button" type="button">Click to Start</button>
+      </div>
+    </div>
+
+    <div id="legend">
+      <span><b>Move</b> A / D · ← / →</span>
+      <span><b>Jump</b> Space · W · ↑</span>
+      <span><b>Confirm</b> Enter · E</span>
+      <span><b>Pause</b> Esc · P</span>
+    </div>
+
+    <script>
+      (function () {
+        var overlay = document.getElementById("overlay");
+        var statusEl = document.getElementById("status");
+        var barEl = document.getElementById("progress-bar");
+        var startButton = document.getElementById("start-button");
+        var canvas = document.getElementById("canvas");
+
+        var runtimeReady = false;
+
+        function setProgress(pct) {
+          barEl.style.width = Math.max(0, Math.min(100, pct)) + "%";
+        }
+
+        function dismiss() {
+          overlay.classList.add("hidden");
+          canvas.focus();
+        }
+
+        // Reveal the start button and auto-dismiss after 1 s so the canvas
+        // appears even if the user misses the button.  The game handles its
+        // own WebAudio unlock via armAudio() on the first keypress/click.
+        function showStart() {
+          if (!runtimeReady) return;
+          statusEl.textContent = "Ready";
+          setProgress(100);
+          startButton.style.display = "inline-block";
+          setTimeout(dismiss, 1000);
+        }
+
+        startButton.addEventListener("click", dismiss);
+
+        // Keep keyboard input flowing to the game without scrolling the page.
+        window.addEventListener(
+          "keydown",
+          function (e) {
+            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].indexOf(e.key) !== -1) {
+              e.preventDefault();
+            }
+          },
+          false
+        );
+
+        // ----- Emscripten Module wiring ---------------------------------------
+        var Module = {
+          canvas: canvas,
+          // Status text doubles as the loading-bar driver. Emscripten reports
+          // download progress as "... (x/y)" while run dependencies resolve.
+          setStatus: function (text) {
+            if (!text) {
+              // Empty status === runtime initialized and main() about to run.
+              runtimeReady = true;
+              showStart();
+              return;
+            }
+            statusEl.textContent = text;
+            var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+            if (m) {
+              var done = parseFloat(m[2]);
+              var total = parseFloat(m[4]);
+              if (total > 0) setProgress((done / total) * 100);
+            }
+          },
+          totalDependencies: 0,
+          monitorRunDependencies: function (left) {
+            this.totalDependencies = Math.max(this.totalDependencies, left);
+            if (left === 0) {
+              runtimeReady = true;
+              showStart();
+            } else {
+              var done = this.totalDependencies - left;
+              this.setStatus(
+                "Preparing… (" + done + "/" + this.totalDependencies + ")"
+              );
+            }
+          },
+          print: function () {
+            console.log.apply(console, arguments);
+          },
+          printErr: function () {
+            console.error.apply(console, arguments);
+          },
+        };
+        window.Module = Module;
+
+        Module.setStatus("Downloading…");
+        window.onerror = function (msg) {
+          // Safety net only. The "detached ArrayBuffer" crash (miniaudio
+          // ScriptProcessorNode / ASYNCIFY rewind) is fixed at the root by pinning
+          // the WASM heap to a fixed size (ALLOW_MEMORY_GROWTH=0 in build.zig), so
+          // a buffer swap can never happen. If this ever fires again it means the
+          // heap grew anyway (OOM bump the fixed size) — surface it, don't hide it.
+          statusEl.textContent = "Error — see console";
+          console.error(msg);
+        };
+      })();
+    </script>
+
+    {{{ SCRIPT }}}
+  </body>
+</html>

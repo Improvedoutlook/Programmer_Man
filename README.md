@@ -32,6 +32,22 @@ Programmer_Man is a retro-style platformer where you play as a programmer naviga
 | Pause | `P` or `Escape` |
 | Restart (after game over) | `R` |
 
+## Play in the Browser
+
+Programmer_Man runs in the browser via WebAssembly — no install required. Open the
+hosted page (or serve a local build — see
+[Web / Browser Build](#web--browser-build-webassembly) below), let the loading bar
+finish, then click the **Click to Start** button on the title overlay.
+
+That first click is intentional and required: browsers block audio until the player
+interacts with the page, so the button both unlocks sound and starts the title
+screen with music. From the title screen, press **Enter** to begin Level 1. All
+keyboard controls match the desktop version (see the table above).
+
+> The page must be served over HTTP(S). Opening the files directly with a
+> `file://` URL will **not** work — the browser has to `fetch()` the `.wasm` and
+> `.data` files.
+
 ## Controller Support (Windows — Wireless Controllers)
 
 The game supports wireless controllers. For many DualShock/DualSense and clone controllers on Windows, using a small helper app (DS4Windows) to create a virtual XInput controller produces reliable input.
@@ -148,10 +164,13 @@ must `fetch()` the `.wasm`/`.data`).
 emcc's bare default: a centered, aspect-ratio-locked `<canvas>` that CSS scales
 from the game's fixed 800×600 framebuffer (crisp nearest-neighbor filtering), a
 loading/progress bar driven by Emscripten's `Module.setStatus` /
-`monitorRunDependencies`, a **Click to Start** button that supplies the user
-gesture browsers require to unlock WebAudio (the title screen then arms audio on
-the first key — see Phase 4), and a controls legend. Edit `web/shell.html` to
-restyle the page; no game-code rebuild logic depends on it.
+`monitorRunDependencies`, a **Click to Start** button that gates the start of the
+game, and a controls legend. The button is the real start gate: clicking it both
+supplies the user gesture browsers require to unlock WebAudio (resuming
+miniaudio's suspended `AudioContext`) and signals the game — via the
+`window.Module.pmStarted` flag, which the wasm side polls — to begin the opening
+track. Any input on the canvas still arms audio too, as a fallback. Edit
+`web/shell.html` to restyle the page; no game-code rebuild logic depends on it.
 
 **Local test.** Always serve over HTTP — the browser must `fetch()` the
 `.wasm`/`.data`, so `file://` will not work:

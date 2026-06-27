@@ -171,6 +171,13 @@
         font-size: 0.85rem;
       }
       #legend b { color: var(--text); font-weight: 600; }
+      #gamepad-note {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.8rem;
+        text-align: center;
+        max-width: 520px;
+      }
       a { color: var(--accent); }
     </style>
   </head>
@@ -200,12 +207,13 @@
     </div>
 
     <div id="legend">
-      <span><b>Move</b> A / D · ← / →</span>
-      <span><b>Jump</b> Space · W · ↑</span>
-      <span><b>Confirm</b> Enter · E</span>
-      <span><b>Pause</b> Esc · P</span>
+      <span><b>Move</b> A / D · ← / → · d-pad / stick</span>
+      <span><b>Jump</b> Space · W · ↑ · A / Cross</span>
+      <span><b>Confirm</b> Enter · E · X / Square</span>
+      <span><b>Pause</b> Esc · P · Start</span>
       <span><b>Fullscreen</b> F · ⛶</span>
     </div>
+    <p id="gamepad-note">🎮 Gamepad supported — press any button (you may need to press one first so your browser detects it).</p>
 
     <script>
       (function () {

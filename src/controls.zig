@@ -1,8 +1,18 @@
 //! Centralized control bindings for keyboard and gamepad input.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const rl = @import("raylib");
 const config = @import("config.zig");
+
+// On the web build raylib reads the browser Gamepad API directly, so its
+// gamepad functions (isGamepadAvailable / isGamepadButtonDown / axis movement)
+// just work. The raw GLFW joystick fallback below, however, does NOT: emscripten's
+// GLFW port leaves glfwJoystickIsGamepad / glfwGetJoystickHats / glfwGetJoystickGUID
+// unimplemented, so calling them throws "… not implemented" the instant a pad
+// button is pressed. We compile the raw path out on web and rely solely on
+// raylib's mapped gamepad API there.
+const is_web = builtin.target.os.tag == .emscripten;
 
 pub const Action = enum {
     move_left,
@@ -93,15 +103,18 @@ pub fn init() void {
 pub fn poll() FrameInput {
     const gamepad = getActiveGamepad();
 
-    // Update raw joystick state each frame
-    if (gamepad) |info| {
-        updateRawJoystickState(info.index);
-    } else {
-        raw_btn_prev = raw_btn_cur;
-        @memset(&raw_btn_cur, 0);
-        raw_hat_prev = raw_hat_cur;
-        raw_hat_cur = 0;
-        raw_axis_lx = 0.0;
+    // Update raw joystick state each frame (desktop only — the raw GLFW joystick
+    // calls are unimplemented on emscripten's GLFW port, see is_web above).
+    if (!is_web) {
+        if (gamepad) |info| {
+            updateRawJoystickState(info.index);
+        } else {
+            raw_btn_prev = raw_btn_cur;
+            @memset(&raw_btn_cur, 0);
+            raw_hat_prev = raw_hat_cur;
+            raw_hat_cur = 0;
+            raw_axis_lx = 0.0;
+        }
     }
 
     return .{
@@ -295,8 +308,11 @@ fn getActiveGamepad() ?GamepadInfo {
             if (isSkippedDevice(name)) continue;
 
             if (!last_gamepad_state or last_gamepad_index != gamepad_index) {
-                // Determine if this controller has a working SDL mapping
-                const has_mapping = glfwJoystickIsGamepad(gamepad_index) != 0;
+                // Determine if this controller has a working SDL mapping. On web
+                // we always take the mapped path: emscripten's GLFW lacks
+                // glfwJoystickIsGamepad (calling it throws), and raylib's browser
+                // Gamepad API backend already provides a standard mapping.
+                const has_mapping = if (is_web) true else glfwJoystickIsGamepad(gamepad_index) != 0;
                 use_raw_fallback = !has_mapping;
 
                 // Record connection state; avoid debug output in normal runs.

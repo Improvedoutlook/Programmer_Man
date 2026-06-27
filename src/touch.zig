@@ -1,17 +1,30 @@
-//! On-screen touch controls for the web / tablet build (iPad, phones, etc.).
+//! Gesture touch controls for the web / tablet build (iPad, phones, etc.).
 //!
-//! raylib's web backend reports multitouch points in the same fixed 800x600
-//! framebuffer space the game renders to (getTouchPosition), so we can define
-//! virtual buttons at fixed coordinates, hit-test every active finger against
-//! them each frame, and fold the result into the normal input path. Multitouch
-//! is the whole point: it lets a player hold ◀/▶ with one thumb and tap JUMP
-//! with the other at the same time — something the browser's single synthesized
-//! mouse cannot express.
+//! Instead of fixed on-screen buttons (which ate the bottom third of the
+//! screen), the whole play area is the controller:
 //!
-//! Everything here is compiled in only on the web target. On native builds
-//! `is_web` is comptime-false, so every entry point collapses to a no-op /
-//! default and not a single raylib touch or draw call is emitted — desktop is
-//! completely untouched.
+//!   * Tap anywhere      -> jump
+//!   * Hold & swipe left  -> run left  (for as long as the finger stays left)
+//!   * Hold & swipe right -> run right
+//!
+//! Movement is a "relative joystick": each finger remembers where it first
+//! touched down, and the character runs in the direction the finger has since
+//! been dragged. Releasing back toward the start stops the run. Because raylib's
+//! web backend reports every finger separately (getTouchPosition by index), one
+//! thumb can hold a run while the other taps to jump at the same time — the
+//! multitouch that a browser's single synthesized mouse cannot express.
+//!
+//! Tap vs. swipe is decided per finger: a finger that never travels past the
+//! move deadzone and lifts again quickly is a tap (jump); a finger that crosses
+//! the deadzone becomes a move and can no longer fire a jump. Because a tap is
+//! only known on release, the jump fires on lift — but to keep jumps full
+//! height (the player physics use a held-jump flag for variable height,
+//! player.zig) the held flag is latched on for a short window after the tap.
+//!
+//! A small pause button is kept top-right; a touch that starts on it pauses
+//! rather than moving/jumping. Everything here compiles in only on the web
+//! target: on native `is_web` is comptime-false and every entry point collapses
+//! to a no-op, so desktop is completely untouched.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -23,92 +36,150 @@ const is_web = builtin.target.os.tag == .emscripten;
 const GW: f32 = @floatFromInt(config.GAME_WIDTH);
 const GH: f32 = @floatFromInt(config.GAME_HEIGHT);
 
-// --- Virtual button geometry (in the 800x600 framebuffer space) -------------
-// Left thumb gets the two movement buttons in the bottom-left; the right thumb
-// gets a larger JUMP button in the bottom-right. The pause button sits top-right
-// to clear the score/lives/health HUD (top-left) and the HTML fullscreen button
-// (very top-right corner of the canvas).
-const dpad_r: f32 = 56; // movement button radius
-const jump_r: f32 = 70; // jump button radius (deliberately bigger)
-const margin: f32 = 30;
-
-const left_c = Vec{ .x = margin + dpad_r, .y = GH - margin - dpad_r };
-const right_c = Vec{ .x = margin + dpad_r * 3 + 24, .y = GH - margin - dpad_r };
-const jump_c = Vec{ .x = GW - margin - jump_r, .y = GH - margin - jump_r };
-const pause_rect = rl.Rectangle{ .x = GW - 64 - 70, .y = 16, .width = 64, .height = 48 };
-
 const Vec = rl.Vector2;
-
 const accent = rl.Color{ .r = 74, .g = 214, .b = 196, .a = 255 };
 
-// --- Per-frame state --------------------------------------------------------
-var seen_touch: bool = false; // have we ever seen a finger? (controls UI visibility)
+// --- Tuning (all in the 800x600 framebuffer space) --------------------------
+const move_deadzone: f32 = 36; // horizontal travel before a finger becomes a "move"
+const move_hysteresis: f32 = 12; // |dx| under this (while moving) = standing still
+const tap_max_move: f32 = 24; // a tap must not drift more than this
+const tap_max_time: f64 = 0.30; // ...nor be held longer than this (seconds)
+const jump_hold_window: f32 = 0.35; // how long the jump flag stays latched after a tap
+
+// Small pause button, top-right, clear of the HUD (top-left) and the HTML
+// fullscreen button (very top-right corner of the canvas).
+const pause_rect = rl.Rectangle{ .x = GW - 64 - 70, .y = 16, .width = 64, .height = 48 };
+
+// --- Per-finger tracking ----------------------------------------------------
+const Kind = enum { pending, move, pause };
+
+const Tracked = struct {
+    id: i32 = -1,
+    active: bool = false,
+    kind: Kind = .pending,
+    start: Vec = .{ .x = 0, .y = 0 },
+    last: Vec = .{ .x = 0, .y = 0 },
+    start_time: f64 = 0,
+    dir: i32 = 0, // -1 left, 0 none, +1 right (only meaningful for .move)
+};
+
+var tracked: [16]Tracked = [_]Tracked{.{}} ** 16;
+
+// --- Aggregated per-frame state (read by the queries below) ------------------
+var seen_touch: bool = false; // ever seen a finger? (controls UI visibility)
+var has_interacted: bool = false; // jumped or moved at least once (hides the hint)
 var left_held: bool = false;
 var right_held: bool = false;
-var jump_held: bool = false;
-var jump_held_prev: bool = false;
-var pause_held: bool = false;
-var pause_held_prev: bool = false;
-var fresh_tap: bool = false; // a brand-new finger touched down this frame
+var jump_pressed: bool = false; // rising edge: a tap lifted this frame
+var jump_hold_timer: f32 = 0; // > 0 => report jump as held (full-height jumps)
+var pause_pressed: bool = false; // rising edge: a finger landed on the pause button
+var pause_active: bool = false; // a finger is currently on the pause button (for highlight)
+var fresh_tap: bool = false; // a brand-new finger touched down this frame (menus)
 
-// Touch-point ids active last frame, used to detect a *new* tap (rising edge)
-// robustly even when other fingers are already down.
-var prev_ids: [16]i32 = [_]i32{-1} ** 16;
-var prev_id_count: usize = 0;
+fn findTracked(id: i32) ?*Tracked {
+    for (&tracked) |*t| {
+        if (t.active and t.id == id) return t;
+    }
+    return null;
+}
 
-/// Sample all active touch points and recompute button state. Call once per
+fn freeSlot() ?*Tracked {
+    for (&tracked) |*t| {
+        if (!t.active) return t;
+    }
+    return null;
+}
+
+/// Sample all active touch points and recompute gesture state. Call once per
 /// frame, before anything reads the queries below (controls.poll does this).
 pub fn update() void {
     if (!is_web) return;
 
-    jump_held_prev = jump_held;
-    pause_held_prev = pause_held;
+    const now = rl.getTime();
+    const dt = rl.getFrameTime();
 
-    left_held = false;
-    right_held = false;
-    jump_held = false;
-    pause_held = false;
+    // Reset per-frame edges; decay the latched jump-hold window.
+    jump_pressed = false;
+    pause_pressed = false;
+    fresh_tap = false;
+    if (jump_hold_timer > 0) jump_hold_timer = @max(0, jump_hold_timer - dt);
+
+    // Mark every tracked finger unseen; we re-confirm the ones still down.
+    var seen_this_frame: [16]bool = [_]bool{false} ** 16;
 
     const count: usize = @intCast(@max(0, rl.getTouchPointCount()));
     if (count > 0) seen_touch = true;
 
-    var cur_ids: [16]i32 = [_]i32{-1} ** 16;
-    var cur_id_count: usize = 0;
-
     var i: usize = 0;
     while (i < count) : (i += 1) {
         const idx: i32 = @intCast(i);
+        const id = rl.getTouchPointId(idx);
         const p = rl.getTouchPosition(idx);
 
-        if (rl.checkCollisionPointCircle(p, left_c, dpad_r)) left_held = true;
-        if (rl.checkCollisionPointCircle(p, right_c, dpad_r)) right_held = true;
-        if (rl.checkCollisionPointCircle(p, jump_c, jump_r)) jump_held = true;
-        if (rl.checkCollisionPointRec(p, pause_rect)) pause_held = true;
-
-        if (cur_id_count < cur_ids.len) {
-            cur_ids[cur_id_count] = rl.getTouchPointId(idx);
-            cur_id_count += 1;
-        }
-    }
-
-    // A fresh tap = an id present now that was not present last frame.
-    fresh_tap = false;
-    for (cur_ids[0..cur_id_count]) |id| {
-        var was_down = false;
-        for (prev_ids[0..prev_id_count]) |pid| {
-            if (pid == id) {
-                was_down = true;
-                break;
+        if (findTracked(id)) |t| {
+            t.last = p;
+            for (&tracked, 0..) |*tt, k| {
+                if (tt == t) seen_this_frame[k] = true;
+            }
+        } else {
+            // New finger down.
+            fresh_tap = true;
+            const slot = freeSlot() orelse continue;
+            slot.* = .{
+                .id = id,
+                .active = true,
+                .start = p,
+                .last = p,
+                .start_time = now,
+                .kind = if (rl.checkCollisionPointRec(p, pause_rect)) .pause else .pending,
+            };
+            for (&tracked, 0..) |*tt, k| {
+                if (tt == slot) seen_this_frame[k] = true;
+            }
+            if (slot.kind == .pause) {
+                pause_pressed = true; // fire pause immediately on press
             }
         }
-        if (!was_down) {
-            fresh_tap = true;
-            break;
-        }
     }
 
-    prev_ids = cur_ids;
-    prev_id_count = cur_id_count;
+    // Promote pending fingers to moves once they cross the deadzone, and resolve
+    // their current direction. Detect releases (tracked but not seen) and turn a
+    // quick, near-stationary pending release into a jump.
+    left_held = false;
+    right_held = false;
+    pause_active = false;
+
+    for (&tracked, 0..) |*t, k| {
+        if (!t.active) continue;
+
+        if (!seen_this_frame[k]) {
+            // Finger lifted this frame.
+            if (t.kind == .pending) {
+                const ddx = t.last.x - t.start.x;
+                const ddy = t.last.y - t.start.y;
+                const dist2 = ddx * ddx + ddy * ddy;
+                if ((now - t.start_time) <= tap_max_time and dist2 <= tap_max_move * tap_max_move) {
+                    jump_pressed = true;
+                    jump_hold_timer = jump_hold_window;
+                    has_interacted = true;
+                }
+            }
+            t.* = .{}; // free the slot
+            continue;
+        }
+
+        const dx = t.last.x - t.start.x;
+        if (t.kind == .pending and @abs(dx) > move_deadzone) {
+            t.kind = .move;
+            has_interacted = true;
+        }
+        if (t.kind == .move) {
+            t.dir = if (dx <= -move_hysteresis) -1 else if (dx >= move_hysteresis) 1 else 0;
+            if (t.dir < 0) left_held = true;
+            if (t.dir > 0) right_held = true;
+        }
+        if (t.kind == .pause) pause_active = true;
+    }
 }
 
 // --- Queries (folded into FrameInput / used by menu handlers) ---------------
@@ -119,14 +190,16 @@ pub fn isLeftDown() bool {
 pub fn isRightDown() bool {
     return is_web and right_held;
 }
+/// Held while a tap-jump is still within its latch window, so the variable
+/// jump-height physics (player.zig) produce a full jump from a quick tap.
 pub fn isJumpDown() bool {
-    return is_web and jump_held;
+    return is_web and jump_hold_timer > 0;
 }
 pub fn isJumpPressed() bool {
-    return is_web and jump_held and !jump_held_prev;
+    return is_web and jump_pressed;
 }
 pub fn isPausePressed() bool {
-    return is_web and pause_held and !pause_held_prev;
+    return is_web and pause_pressed;
 }
 
 /// True on the frame a new finger touches down anywhere. Menu screens
@@ -147,17 +220,15 @@ pub fn isActive() bool {
 
 const GameState = @import("game.zig").GameState;
 
-/// Draw the on-screen controls appropriate to the current screen. No-op on
-/// native, and on web until the first touch is detected.
+/// Draw the (minimal) touch UI for the current screen. No-op on native, and on
+/// web until the first touch is detected.
 pub fn render(state: GameState) void {
     if (!is_web or !seen_touch) return;
 
     switch (state) {
         .playing => {
-            drawDpadButton(left_c, left_held, .left);
-            drawDpadButton(right_c, right_held, .right);
-            drawJumpButton();
             drawPauseButton(false);
+            if (!has_interacted) drawHint();
         },
         .paused => {
             drawPauseButton(true);
@@ -169,56 +240,22 @@ pub fn render(state: GameState) void {
     }
 }
 
-const Dir = enum { left, right };
-
 fn fillFor(held: bool) rl.Color {
     return rl.Color{ .r = accent.r, .g = accent.g, .b = accent.b, .a = if (held) 150 else 60 };
 }
 
-fn drawDpadButton(c: Vec, held: bool, dir: Dir) void {
-    rl.drawCircleV(c, dpad_r, fillFor(held));
-    rl.drawCircleLinesV(c, dpad_r, accent);
-
-    // Arrow triangle. Backface culling is off in raylib's 2D path, so winding
-    // does not matter here (cf. the moving-platform chevrons in platform.zig).
-    const s = dpad_r * 0.45;
-    switch (dir) {
-        .left => rl.drawTriangle(
-            .{ .x = c.x - s, .y = c.y },
-            .{ .x = c.x + s * 0.7, .y = c.y - s },
-            .{ .x = c.x + s * 0.7, .y = c.y + s },
-            rl.Color.white,
-        ),
-        .right => rl.drawTriangle(
-            .{ .x = c.x + s, .y = c.y },
-            .{ .x = c.x - s * 0.7, .y = c.y + s },
-            .{ .x = c.x - s * 0.7, .y = c.y - s },
-            rl.Color.white,
-        ),
-    }
-}
-
-fn drawJumpButton() void {
-    rl.drawCircleV(jump_c, jump_r, fillFor(jump_held));
-    rl.drawCircleLinesV(jump_c, jump_r, accent);
-
-    // Up arrow.
-    const s = jump_r * 0.4;
-    rl.drawTriangle(
-        .{ .x = jump_c.x, .y = jump_c.y - s - 6 },
-        .{ .x = jump_c.x - s, .y = jump_c.y + 2 },
-        .{ .x = jump_c.x + s, .y = jump_c.y + 2 },
-        rl.Color.white,
-    );
-
-    const label = "JUMP";
-    const fs = 18;
+/// Faint one-time hint shown until the player first jumps or moves.
+fn drawHint() void {
+    const label = "Tap to Jump  -  Swipe to Move";
+    const fs = 20;
     const w = rl.measureText(label, fs);
-    rl.drawText(label, @as(i32, @intFromFloat(jump_c.x)) - @divTrunc(w, 2), @as(i32, @intFromFloat(jump_c.y)) + 14, fs, rl.Color.white);
+    const x = @divTrunc(config.GAME_WIDTH, 2) - @divTrunc(w, 2);
+    const y = config.GAME_HEIGHT - 46;
+    rl.drawText(label, x, y, fs, rl.Color{ .r = accent.r, .g = accent.g, .b = accent.b, .a = 150 });
 }
 
 fn drawPauseButton(is_paused: bool) void {
-    rl.drawRectangleRounded(pause_rect, 0.3, 6, fillFor(pause_held));
+    rl.drawRectangleRounded(pause_rect, 0.3, 6, fillFor(pause_active));
     rl.drawRectangleRoundedLinesEx(pause_rect, 0.3, 6, 1.5, accent);
 
     const cx = pause_rect.x + pause_rect.width / 2;

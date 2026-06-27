@@ -146,8 +146,9 @@ This is an **additive** target — the native desktop build above is unchanged. 
 > **Browser input:** gamepads work in the browser via the Web Gamepad API (the
 > desktop-only raw GLFW joystick fallback is compiled out on the web target, which
 > also fixes a `glfwJoystickIsGamepad not implemented` crash), and `touch.zig`
-> adds on-screen multitouch controls for tablets/phones. Both are web-only and
-> compile to no-ops on native.
+> adds gesture controls for tablets/phones — tap anywhere to jump, hold and swipe
+> left/right to run (multitouch, so one thumb can run while the other taps to
+> jump). Both are web-only and compile to no-ops on native.
 
 **Validated web toolchain:**
 
@@ -257,7 +258,7 @@ files to any static host:
 - ✅ Game states (opening screen, playing, paused, game over, victory/level-complete)
 - ✅ Centralized input handling (`controls.zig`) — keyboard, XInput gamepad, and raw GLFW fallback for unmapped controllers (desktop)
 - ✅ Browser gamepad support (Web Gamepad API; the desktop-only raw GLFW joystick path is compiled out on the web target)
-- ✅ On-screen touch controls (`touch.zig`) for tablets/phones — multitouch ◀ ▶ / JUMP / pause buttons and tap-to-confirm on menus, web-only and zero-cost on native
+- ✅ Gesture touch controls (`touch.zig`) for tablets/phones — tap to jump, hold-and-swipe left/right to run (multitouch), a small pause button, and tap-to-confirm on menus; web-only and zero-cost on native
 
 ## Project Structure
 
@@ -270,7 +271,7 @@ tile-based-raylib-game/
 │   ├── game.zig        # Game state management
 │   ├── config.zig      # Game constants
 │   ├── controls.zig    # Centralized input (keyboard, gamepad, raw GLFW fallback)
-│   ├── touch.zig       # On-screen touch controls for the web/tablet build
+│   ├── touch.zig       # Gesture touch controls (tap=jump, swipe=move) for web/tablet
 │   ├── player.zig      # Player physics & rendering
 │   ├── enemy.zig       # Bug enemy AI
 │   ├── tilemap.zig     # Level tiles & collision

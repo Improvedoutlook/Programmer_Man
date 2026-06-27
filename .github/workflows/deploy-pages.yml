@@ -1,0 +1,67 @@
+name: Deploy web build to GitHub Pages
+
+# Builds the wasm32-emscripten target with the validated toolchain
+# (Zig 0.13.0 + Emscripten 3.1.50) and publishes zig-out/htmlout to Pages.
+# Game ends up live at https://improvedoutlook.github.io/Programmer_Man/
+#
+# One-time setup in the repo: Settings -> Pages -> Source: "GitHub Actions".
+
+on:
+  push:
+    branches: [develop-main, main]
+  workflow_dispatch:
+
+# Permissions the deploy-pages action needs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deploy at a time; newer pushes supersede in-flight ones.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Pin Zig to 0.13.0 — newer Zig breaks the pinned raylib-zig v5.5 build API.
+      - name: Install Zig 0.13.0
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.13.0
+
+      # Emscripten 3.1.50 is the version validated for this project's wasm build.
+      - name: Install Emscripten 3.1.50
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.50
+
+      # Default install step links via emcc and writes zig-out/htmlout/.
+      # (run-web is skipped: that step serves via emrun and would hang CI.)
+      - name: Build web target
+        run: >
+          zig build
+          -Dtarget=wasm32-emscripten
+          -Doptimize=ReleaseFast
+          --sysroot "$EMSDK/upstream/emscripten"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: zig-out/htmlout
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

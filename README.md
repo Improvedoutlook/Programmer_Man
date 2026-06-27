@@ -84,17 +84,28 @@ Notes:
 
 ## Building
 
-### Prerequisites
+**Prerequisite:** [Zig 0.13.0](https://ziglang.org/download/) (do **not** upgrade past 0.13 — see the web toolchain note below).
 
-1. **Zig**: Version 0.13.0 or later from [ziglang.org](https://ziglang.org/download/)
+There are two helper scripts. That's all you need day to day:
 
-### Build Steps
+| Run on... | Command |
+|-----------|---------|
+| **Desktop** (local window) | `.\dev.ps1` |
+| **Browser** (WebAssembly) | `.\web.ps1` |
+
+Both rebuild from scratch and launch the game. `.\web.ps1` also needs the
+Emscripten SDK installed once — see [Web / Browser Build](#web--browser-build-webassembly).
+
+<details>
+<summary>Prefer raw <code>zig build</code>? (what the scripts run under the hood)</summary>
 
 ```bash
-cd tile-based-raylib-game
-zig build
-zig build run
+zig build        # compile the native desktop build
+zig build run    # ...and launch it
 ```
+
+The browser equivalent is in [Web / Browser Build](#web--browser-build-webassembly).
+</details>
 
 ### Web / Browser Build (WebAssembly)
 
@@ -134,26 +145,32 @@ cd C:\Users\HP\emsdk
 .\upstream\emscripten\emcc.bat --version   # -> emcc ... 3.1.50
 ```
 
-**Web build command.** Web builds pass Emscripten's path to Zig via `--sysroot`.
-Use the `run-web` step to build and serve via `emrun` in one shot:
+**Web build command.** Once the Emscripten SDK is installed (above), build and
+play in the browser with one script:
+
+```powershell
+.\web.ps1              # build + serve in the browser
+.\web.ps1 -BuildOnly   # just produce zig-out\htmlout\ (no server)
+```
+
+Output lands in `zig-out\htmlout\` (`index.html`, `.js`, `.wasm`, `.data`). The
+script serves it over HTTP via `emrun`; never open it via `file://` (the browser
+must `fetch()` the `.wasm`/`.data`).
+
+<details>
+<summary>What <code>web.ps1</code> runs under the hood</summary>
+
+Web builds pass Emscripten's path to Zig via `--sysroot`. The script wraps:
 
 ```powershell
 zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast `
   --sysroot "C:\Users\HP\emsdk\upstream\emscripten" run-web
 ```
 
-To build the artifacts **without** launching a server, drop the `run-web` step
-(the default install step produces them):
-
-```powershell
-zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast `
-  --sysroot "C:\Users\HP\emsdk\upstream\emscripten"
-```
-
-Output lands in `zig-out\htmlout\` (`index.html`, `.js`, `.wasm`, `.data`). Serve it
-over HTTP — e.g. `emrun zig-out\htmlout\index.html` or
-`python -m http.server` from that folder. Do **not** open via `file://` (the browser
-must `fetch()` the `.wasm`/`.data`).
+`run-web` is the build-and-serve step; dropping it (the `-BuildOnly` switch) just
+emits the artifacts. If your emsdk lives elsewhere, set `$env:EMSDK_EMSCRIPTEN`
+to its `upstream\emscripten` path and the script picks it up.
+</details>
 
 > The emcc link flags come from raylib-zig's `emcc.zig`:
 > `-sUSE_OFFSET_CONVERTER -sFULL-ES3=1 -sUSE_GLFW=3 -sASYNCIFY -O3`. The `-sASYNCIFY`
@@ -176,11 +193,9 @@ track. Any input on the canvas still arms audio too, as a fallback. Edit
 `.wasm`/`.data`, so `file://` will not work:
 
 ```powershell
-# one-shot build + serve:
-zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast `
-  --sysroot "C:\Users\HP\emsdk\upstream\emscripten" run-web
+.\web.ps1                                         # one-shot build + serve
 # or serve an already-built folder:
-cd zig-out\htmlout; python -m http.server 8080   # then open http://localhost:8080
+cd zig-out\htmlout; python -m http.server 8080    # then open http://localhost:8080
 ```
 
 **Deploying (static hosting).** The artifact is the whole `zig-out\htmlout\`

@@ -69,6 +69,50 @@
         outline: none;
       }
 
+      /* Fullscreen toggle, pinned to the stage corner. It sits before the
+         overlay in the DOM, so while the loading/start overlay is up it is
+         painted over and only becomes visible once the overlay is dismissed. */
+      #fullscreen-button {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        border: 1px solid var(--accent-dim);
+        background: rgba(11, 15, 26, 0.6);
+        color: var(--accent);
+        border-radius: 6px;
+        font-size: 1.15rem;
+        line-height: 1;
+        opacity: 0.65;
+        transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+      }
+      #fullscreen-button:hover { opacity: 1; background: var(--accent); color: var(--bg); }
+
+      /* When the stage is fullscreen it fills the viewport (black background).
+         Center the canvas and size it to the largest 800x600-aspect box that
+         fits, so it letterboxes/pillarboxes instead of stretching. */
+      #stage:fullscreen {
+        width: 100vw;
+        height: 100vh;
+        max-width: none;
+        border: none;
+        border-radius: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #000;
+      }
+      #stage:fullscreen canvas#canvas {
+        width: min(100vw, 100vh * 800 / 600);
+        height: auto;
+        aspect-ratio: 800 / 600;
+      }
+
       /* Loading + click-to-start overlay (doubles as the audio-unlock gesture,
          see PM_BrowserGameplay.md Phase 4). */
       #overlay {
@@ -141,6 +185,13 @@
         tabindex="-1"
       ></canvas>
 
+      <button
+        id="fullscreen-button"
+        type="button"
+        title="Fullscreen (F)"
+        aria-label="Toggle fullscreen"
+      >⛶</button>
+
       <div id="overlay">
         <div id="status">Loading…</div>
         <div id="progress-track"><div id="progress-bar"></div></div>
@@ -153,6 +204,7 @@
       <span><b>Jump</b> Space · W · ↑</span>
       <span><b>Confirm</b> Enter · E</span>
       <span><b>Pause</b> Esc · P</span>
+      <span><b>Fullscreen</b> F · ⛶</span>
     </div>
 
     <script>
@@ -162,6 +214,8 @@
         var barEl = document.getElementById("progress-bar");
         var startButton = document.getElementById("start-button");
         var canvas = document.getElementById("canvas");
+        var stage = document.getElementById("stage");
+        var fullscreenButton = document.getElementById("fullscreen-button");
 
         var runtimeReady = false;
 
@@ -194,10 +248,33 @@
           dismiss();
         });
 
+        // Toggle browser fullscreen on the stage. requestFullscreen() must be
+        // called from a user gesture (the button click or an F keypress both
+        // qualify). The fixed 800x600 framebuffer is unchanged; the :fullscreen
+        // CSS just scales the canvas up with letterboxing. Refocus the canvas
+        // afterwards so keyboard input keeps reaching the game.
+        function toggleFullscreen() {
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else if (stage.requestFullscreen) {
+            stage.requestFullscreen().catch(function (err) {
+              console.error("Fullscreen request failed:", err);
+            });
+          }
+          setTimeout(function () { canvas.focus(); }, 0);
+        }
+
+        fullscreenButton.addEventListener("click", toggleFullscreen);
+
         // Keep keyboard input flowing to the game without scrolling the page.
         window.addEventListener(
           "keydown",
           function (e) {
+            if (e.key === "f" || e.key === "F") {
+              toggleFullscreen();
+              e.preventDefault();
+              return;
+            }
             if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].indexOf(e.key) !== -1) {
               e.preventDefault();
             }

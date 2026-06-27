@@ -14,6 +14,7 @@ const AiType = @import("tilemap.zig").AiType;
 const SparkManager = @import("hazards.zig").SparkManager;
 const MovingPlatformManager = @import("platform.zig").MovingPlatformManager;
 const audio = @import("audio.zig");
+const touch = @import("touch.zig");
 
 // Web only: the custom shell's "Click to Start" button sets window.Module.pmStarted
 // (see web/shell.html). raylib only sees input that lands on the <canvas>, so a
@@ -539,7 +540,7 @@ pub const Game = struct {
 
     fn updateOpening(self: *Self, input: controls.FrameInput) void {
         _ = input;
-        if (rl.isKeyPressed(.enter) or rl.isKeyPressed(.kp_enter) or controls.isAnyGamepadButtonPressed()) {
+        if (rl.isKeyPressed(.enter) or rl.isKeyPressed(.kp_enter) or controls.isAnyGamepadButtonPressed() or touch.anyTapPressed()) {
             if (self.opening_music) |*m| {
                 m.stop();
             }
@@ -635,13 +636,15 @@ pub const Game = struct {
     }
 
     fn updatePaused(self: *Self, input: controls.FrameInput) void {
-        if (input.pause_pressed) {
+        // A fresh touch anywhere resumes (the pause button maps to pause_pressed;
+        // tapping elsewhere on the dimmed screen works too).
+        if (input.pause_pressed or touch.anyTapPressed()) {
             self.state = .playing;
         }
     }
 
     fn updateGameOver(self: *Self, input: controls.FrameInput) void {
-        if (input.restart_pressed) {
+        if (input.restart_pressed or touch.anyTapPressed()) {
             // Stop game over music before restarting
             if (self.game_over_music) |*game_over_music| {
                 game_over_music.stop();
@@ -657,7 +660,7 @@ pub const Game = struct {
         if (self.game_complete) {
             // Final victory — once the victory fanfare has played, any button
             // rolls the end credits.
-            if (controls.isAnyInputPressed()) {
+            if (controls.isAnyInputPressed() or touch.anyTapPressed()) {
                 if (self.victory_music) |*victory_music| {
                     victory_music.stop();
                 }
@@ -669,7 +672,7 @@ pub const Game = struct {
             }
         } else {
             // Level complete — press Enter to advance to next level
-            if (input.submit_pressed) {
+            if (input.submit_pressed or touch.anyTapPressed()) {
                 if (self.victory_music) |*victory_music| {
                     victory_music.stop();
                 }
@@ -700,7 +703,7 @@ pub const Game = struct {
 
         // Once the roll has finished, return to the opening screen — same
         // music and image the player sees when first starting the game.
-        if (self.credits_scroll >= max_scroll and input.restart_pressed) {
+        if (self.credits_scroll >= max_scroll and (input.restart_pressed or touch.anyTapPressed())) {
             if (self.credits_music) |*credits_music| {
                 credits_music.stop();
             }
@@ -800,6 +803,10 @@ pub const Game = struct {
             .victory => self.renderVictoryOverlay(),
             else => {},
         }
+
+        // On-screen touch controls (web/tablet only; no-op on native and until a
+        // touch is detected). Drawn last so the buttons sit above the HUD/overlays.
+        touch.render(self.state);
     }
 
     fn renderPausedOverlay(self: *Self) void {

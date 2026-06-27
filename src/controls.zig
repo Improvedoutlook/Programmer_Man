@@ -4,6 +4,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const rl = @import("raylib");
 const config = @import("config.zig");
+const touch = @import("touch.zig");
 
 // On the web build raylib reads the browser Gamepad API directly, so its
 // gamepad functions (isGamepadAvailable / isGamepadButtonDown / axis movement)
@@ -101,6 +102,10 @@ pub fn init() void {
 }
 
 pub fn poll() FrameInput {
+    // Sample on-screen touch controls once per frame (web/tablet only; this is a
+    // comptime no-op on native). Folded into the FrameInput below.
+    touch.update();
+
     const gamepad = getActiveGamepad();
 
     // Update raw joystick state each frame (desktop only — the raw GLFW joystick
@@ -117,7 +122,7 @@ pub fn poll() FrameInput {
         }
     }
 
-    return .{
+    var input = FrameInput{
         .move_x = readMoveAxis(gamepad),
         .jump_pressed = isActionPressed(.jump, gamepad),
         .jump_down = isActionDown(.jump, gamepad),
@@ -127,6 +132,24 @@ pub fn poll() FrameInput {
         .has_gamepad = gamepad != null,
         .gamepad_name = if (gamepad) |info| info.name else null,
     };
+
+    // Merge on-screen touch controls (web only). The JUMP button doubles as
+    // "submit" so a touch player can confirm the PR by jumping into the terminal;
+    // submit is only consumed there (and on the level-complete screen), so this
+    // overload is harmless elsewhere.
+    if (is_web) {
+        if (touch.isLeftDown()) input.move_x -= 1.0;
+        if (touch.isRightDown()) input.move_x += 1.0;
+        input.move_x = std.math.clamp(input.move_x, -1.0, 1.0);
+        if (touch.isJumpDown()) input.jump_down = true;
+        if (touch.isJumpPressed()) {
+            input.jump_pressed = true;
+            input.submit_pressed = true;
+        }
+        if (touch.isPausePressed()) input.pause_pressed = true;
+    }
+
+    return input;
 }
 
 pub fn getConnectedGamepadName() ?[:0]const u8 {
@@ -388,6 +411,7 @@ pub fn isAnyInputPressed() bool {
 /// key/gamepad coverage from isAnyInputPressed().
 pub fn isAudioUnlockGesture() bool {
     if (rl.isMouseButtonPressed(.left) or rl.isMouseButtonPressed(.right)) return true;
+    if (touch.anyTapPressed()) return true;
     return isAnyInputPressed();
 }
 

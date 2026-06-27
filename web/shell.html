@@ -12,7 +12,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
     <title>Programmer_Man</title>
     <style>
       :root {
@@ -67,6 +70,14 @@
         image-rendering: crisp-edges;
         background: #000;
         outline: none;
+        /* Touch/tablet: let the game consume touches instead of the browser
+           scrolling, pinch-zooming, or text-selecting the canvas. Without this,
+           dragging a thumb on iPad pans the page rather than driving the
+           on-screen controls. */
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
       }
 
       /* Fullscreen toggle, pinned to the stage corner. It sits before the
@@ -171,7 +182,7 @@
         font-size: 0.85rem;
       }
       #legend b { color: var(--text); font-weight: 600; }
-      #gamepad-note {
+      .note {
         margin: 0;
         color: var(--muted);
         font-size: 0.8rem;
@@ -213,7 +224,8 @@
       <span><b>Pause</b> Esc · P · Start</span>
       <span><b>Fullscreen</b> F · ⛶</span>
     </div>
-    <p id="gamepad-note">🎮 Gamepad supported — press any button (you may need to press one first so your browser detects it).</p>
+    <p class="note">🎮 Gamepad supported — press any button (you may need to press one first so your browser detects it).</p>
+    <p class="note">📱 Touch supported — on-screen controls appear automatically on tablets &amp; phones.</p>
 
     <script>
       (function () {

@@ -21,16 +21,23 @@ Programmer_Man is a retro-style platformer where you play as a programmer naviga
 - **Scoring system**: +100 points per bug stomped
 - **Lives system**: 3 lives with respawn on death
 - **Opening screen**: Animated title screen with music before the first level
+- **Flexible input**: Keyboard, gamepad (desktop **and** in the browser), and on-screen touch controls
+- **Plays everywhere**: Native desktop build plus a WebAssembly build that runs in any browser — including tablets/phones via touch
 
 ## Controls
 
-| Action | Keys |
-|--------|------|
-| Move Left | `A` or `←` (Left Arrow) |
-| Move Right | `D` or `→` (Right Arrow) |
-| Jump | `Space`, `W`, or `↑` (Up Arrow) |
-| Pause | `P` or `Escape` |
-| Restart (after game over) | `R` |
+| Action | Keyboard | Gamepad | Touch (tablet/phone) |
+|--------|----------|---------|----------------------|
+| Move Left | `A` or `←` (Left Arrow) | D-pad / left stick | ◀ button (bottom-left) |
+| Move Right | `D` or `→` (Right Arrow) | D-pad / left stick | ▶ button (bottom-left) |
+| Jump | `Space`, `W`, or `↑` (Up Arrow) | `A` / Cross | JUMP button (bottom-right) |
+| Confirm / Submit PR | `Enter` or `E` | `X` / Square | Jump onto the terminal, or tap |
+| Pause | `P` or `Escape` | Start | ❚❚ button (top-right) |
+| Restart (after game over) | `R` | `X` / Square | Tap anywhere / RESTART button |
+
+Gamepads work natively **and** in the browser (Web Gamepad API). On a touch
+device the on-screen controls appear automatically the first time you touch the
+screen — on menus, a tap anywhere confirms/continues.
 
 ## Play in the Browser
 
@@ -41,8 +48,18 @@ finish, then click the **Click to Start** button on the title overlay.
 
 That first click is intentional and required: browsers block audio until the player
 interacts with the page, so the button both unlocks sound and starts the title
-screen with music. From the title screen, press **Enter** to begin Level 1. All
-keyboard controls match the desktop version (see the table above).
+screen with music. From the title screen, press **Enter** (or tap, or any gamepad
+button) to begin Level 1. All keyboard controls match the desktop version (see the
+table above).
+
+**Gamepad in the browser.** Connect a controller and press any button on it (the
+browser only exposes a gamepad to the page after the first press) — then it drives
+the game exactly like the desktop build.
+
+**Touch / tablets.** On an iPad, phone, or any touchscreen, on-screen controls
+(◀ ▶, JUMP, pause) appear automatically the first time you touch the screen.
+Multitouch is supported, so you can hold a direction and tap jump at the same time.
+On menus, a tap anywhere confirms/continues.
 
 > The page must be served over HTTP(S). Opening the files directly with a
 > `file://` URL will **not** work — the browser has to `fetch()` the `.wasm` and
@@ -125,6 +142,12 @@ This is an **additive** target — the native desktop build above is unchanged. 
 > Phase 5 adds a custom presentation shell (`web/shell.html`) with a loading bar,
 > click-to-start gesture, and controls legend, plus the deploy layout below. The
 > native desktop build is unchanged.
+>
+> **Browser input:** gamepads work in the browser via the Web Gamepad API (the
+> desktop-only raw GLFW joystick fallback is compiled out on the web target, which
+> also fixes a `glfwJoystickIsGamepad not implemented` crash), and `touch.zig`
+> adds on-screen multitouch controls for tablets/phones. Both are web-only and
+> compile to no-ops on native.
 
 **Validated web toolchain:**
 
@@ -232,7 +255,9 @@ files to any static host:
 - ✅ Audio playback (SFX and music streaming)
 - ✅ Parallax background and decorative elements
 - ✅ Game states (opening screen, playing, paused, game over, victory/level-complete)
-- ✅ Centralized input handling (`controls.zig`) — keyboard, XInput gamepad, and raw GLFW fallback for unmapped controllers
+- ✅ Centralized input handling (`controls.zig`) — keyboard, XInput gamepad, and raw GLFW fallback for unmapped controllers (desktop)
+- ✅ Browser gamepad support (Web Gamepad API; the desktop-only raw GLFW joystick path is compiled out on the web target)
+- ✅ On-screen touch controls (`touch.zig`) for tablets/phones — multitouch ◀ ▶ / JUMP / pause buttons and tap-to-confirm on menus, web-only and zero-cost on native
 
 ## Project Structure
 
@@ -245,6 +270,7 @@ tile-based-raylib-game/
 │   ├── game.zig        # Game state management
 │   ├── config.zig      # Game constants
 │   ├── controls.zig    # Centralized input (keyboard, gamepad, raw GLFW fallback)
+│   ├── touch.zig       # On-screen touch controls for the web/tablet build
 │   ├── player.zig      # Player physics & rendering
 │   ├── enemy.zig       # Bug enemy AI
 │   ├── tilemap.zig     # Level tiles & collision

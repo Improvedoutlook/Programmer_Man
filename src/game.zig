@@ -879,7 +879,12 @@ pub const Game = struct {
     }
 
     fn renderCredits(self: *Self) void {
-        rl.clearBackground(rl.Color.black);
+        // NOTE: do NOT clear the framebuffer here. main.zig already clears the
+        // whole frame to BACKGROUND_COLOR and then draws the animated circuit
+        // background (background.render) *before* this runs. Clearing again
+        // would wipe that backdrop. On native it only survived by accident —
+        // raylib's batched geometry flushed after the clear — but on the web
+        // build the clear erased the chips/traces/grid, leaving just the dots.
 
         // First line's top starts just below the screen, then rises as the
         // scroll value grows.

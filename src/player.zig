@@ -191,11 +191,45 @@ pub const Player = struct {
     }
 
     fn moveAndCollide(self: *Self, dt: f32, tilemap: *const Tilemap) void {
-        // Horizontal movement
-        const new_x = self.x + self.vx * dt;
         const half_width = config.PLAYER_WIDTH / 2;
 
-        // Check horizontal collision
+        // Substep the movement so a single step never travels more than half a
+        // tile. A fast fall (max fall speed is > a tile per frame) or a hitched
+        // mobile frame would otherwise move the player several tiles at once,
+        // over-penetrate a platform, and let the landing snap below place the
+        // feet inside/under the tile — leaving the player embedded and stuck.
+        // Capping each step keeps penetration under one tile so the snap math
+        // is correct, and prevents tunneling clean through thin platforms.
+        const tile_size: f32 = @floatFromInt(config.TILE_SIZE);
+        const max_disp = @max(@abs(self.vx), @abs(self.vy)) * dt;
+        const max_step = tile_size * 0.5;
+        const steps_f = @ceil(max_disp / max_step);
+        const steps: usize = if (steps_f >= 1.0) @intFromFloat(steps_f) else 1;
+        const sub_dt = dt / @as(f32, @floatFromInt(steps));
+
+        var i: usize = 0;
+        while (i < steps) : (i += 1) {
+            self.stepCollide(sub_dt, half_width, tilemap);
+        }
+
+        // Keep player in bounds horizontally (use level dimensions, not screen)
+        if (self.x < half_width) {
+            self.x = half_width;
+            self.vx = 0;
+        }
+        const level_pixel_w = tilemap.getLevelPixelWidth();
+        if (self.x > level_pixel_w - half_width) {
+            self.x = level_pixel_w - half_width;
+            self.vx = 0;
+        }
+    }
+
+    /// Advance the player by a single (sub-stepped) slice of `dt`, resolving
+    /// horizontal then vertical tile collisions. Velocity is zeroed on contact
+    /// so subsequent substeps in the same frame don't keep pushing into a tile.
+    fn stepCollide(self: *Self, dt: f32, half_width: f32, tilemap: *const Tilemap) void {
+        // Horizontal movement
+        const new_x = self.x + self.vx * dt;
         if (!tilemap.checkCollision(new_x - half_width, self.y - config.PLAYER_HEIGHT, config.PLAYER_WIDTH, config.PLAYER_HEIGHT)) {
             self.x = new_x;
         } else {
@@ -221,7 +255,9 @@ pub const Player = struct {
             }
         } else {
             if (self.vy > 0) {
-                // Landing on ground - snap to tile grid
+                // Landing on ground - snap to tile grid. Because each substep
+                // moves < 1 tile, the feet are guaranteed to be inside the
+                // platform's top tile here, so this resolves to its surface.
                 const tile_y = @as(i32, @intFromFloat((ground_check_y) / @as(f32, @floatFromInt(config.TILE_SIZE))));
                 self.y = @as(f32, @floatFromInt(tile_y * config.TILE_SIZE));
                 self.on_ground = true;
@@ -233,17 +269,6 @@ pub const Player = struct {
             if (self.on_ground) {
                 self.vy = 0;
             }
-        }
-
-        // Keep player in bounds horizontally (use level dimensions, not screen)
-        if (self.x < half_width) {
-            self.x = half_width;
-            self.vx = 0;
-        }
-        const level_pixel_w = tilemap.getLevelPixelWidth();
-        if (self.x > level_pixel_w - half_width) {
-            self.x = level_pixel_w - half_width;
-            self.vx = 0;
         }
     }
 

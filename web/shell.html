@@ -14,7 +14,7 @@
     <meta charset="utf-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <title>Programmer_Man</title>
     <style>
@@ -50,10 +50,14 @@
       }
       h1 .accent { color: var(--accent); }
 
-      /* Stage holds the canvas plus overlays, sized to the game aspect ratio. */
+      /* Stage holds the canvas plus overlays, sized to the game aspect ratio.
+         The width is clamped by BOTH the available width and the available
+         height (height * aspect), so the 4:3 box always fits and stays fully
+         visible whether the viewport is wide (landscape) or tall (portrait).
+         dvh/dvw track the live viewport as mobile browser chrome shows/hides. */
       #stage {
         position: relative;
-        width: min(90vw, 80vh * (800 / 600), 800px);
+        width: min(90vw, calc(80dvh * 800 / 600), 800px);
         aspect-ratio: 800 / 600;
         background: #000;
         border: 1px solid #1e2740;
@@ -122,6 +126,56 @@
         width: min(100vw, 100vh * 800 / 600);
         height: auto;
         aspect-ratio: 800 / 600;
+      }
+
+      /* CSS pseudo-fullscreen: the fallback for browsers where the native
+         Fullscreen API can't fullscreen an arbitrary element — most notably
+         iOS Safari, which only fullscreens <video>. Toggled from JS by adding
+         the .pseudo-fullscreen class; visually identical to :fullscreen but it's
+         just a fixed overlay pinned to the live viewport, so it works anywhere. */
+      #stage.pseudo-fullscreen {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        width: 100vw;
+        height: 100dvh;
+        max-width: none;
+        border: none;
+        border-radius: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #000;
+      }
+      #stage.pseudo-fullscreen canvas#canvas {
+        width: min(100vw, calc(100dvh * 800 / 600));
+        height: min(100dvh, calc(100vw * 600 / 800));
+        aspect-ratio: 800 / 600;
+      }
+      body.is-pseudo-fullscreen { overflow: hidden; }
+
+      /* Compact / full-bleed layout for touch devices and small viewports.
+         Drops the surrounding page chrome (title, legend, notes) that would
+         otherwise crowd the canvas off-screen — especially in landscape, where
+         vertical space is scarce — and lets the #stage fill the whole viewport
+         in EITHER orientation. The stage keeps its 4:3 aspect and centers, so
+         the game letterboxes (portrait) / pillarboxes (landscape) against the
+         black body instead of disappearing when the device is rotated. */
+      @media (pointer: coarse), (max-width: 820px), (max-height: 620px) {
+        body {
+          padding: 0;
+          gap: 0;
+          background: #000;
+          min-height: 100dvh;
+        }
+        h1, #legend, .note { display: none; }
+        #stage {
+          width: min(100vw, calc(100dvh * 800 / 600));
+          max-width: none;
+          border: none;
+          border-radius: 0;
+          box-shadow: none;
+        }
       }
 
       /* Loading + click-to-start overlay (doubles as the audio-unlock gesture,
@@ -268,23 +322,87 @@
           dismiss();
         });
 
-        // Toggle browser fullscreen on the stage. requestFullscreen() must be
-        // called from a user gesture (the button click or an F keypress both
-        // qualify). The fixed 800x600 framebuffer is unchanged; the :fullscreen
-        // CSS just scales the canvas up with letterboxing. Refocus the canvas
-        // afterwards so keyboard input keeps reaching the game.
-        function toggleFullscreen() {
-          if (document.fullscreenElement) {
-            document.exitFullscreen();
-          } else if (stage.requestFullscreen) {
-            stage.requestFullscreen().catch(function (err) {
-              console.error("Fullscreen request failed:", err);
-            });
-          }
+        // Refocus the canvas (deferred to after layout) so keyboard input keeps
+        // reaching the game once fullscreen / orientation has settled.
+        function refocusCanvas() {
           setTimeout(function () { canvas.focus(); }, 0);
         }
 
+        // Native Fullscreen API, with vendor-prefixed fallbacks. Returns the
+        // request function bound to the stage, or null if unavailable. iOS
+        // Safari fullscreens only <video>, so this is null there — we fall back
+        // to CSS pseudo-fullscreen below.
+        function nativeRequest() {
+          var fn = stage.requestFullscreen || stage.webkitRequestFullscreen ||
+                   stage.msRequestFullscreen;
+          return fn ? fn.bind(stage) : null;
+        }
+        function nativeExit() {
+          var fn = document.exitFullscreen || document.webkitExitFullscreen ||
+                   document.msExitFullscreen;
+          if (fn) fn.call(document);
+        }
+        function nativeElement() {
+          return document.fullscreenElement || document.webkitFullscreenElement ||
+                 document.msFullscreenElement || null;
+        }
+
+        // CSS pseudo-fullscreen (the mobile / iOS fallback). A fixed overlay
+        // pinned to the live viewport — no Fullscreen API involved.
+        function pseudoActive() {
+          return stage.classList.contains("pseudo-fullscreen");
+        }
+        function setPseudoFullscreen(on) {
+          stage.classList.toggle("pseudo-fullscreen", on);
+          document.body.classList.toggle("is-pseudo-fullscreen", on);
+          updateFullscreenButton();
+          refocusCanvas();
+        }
+
+        // Toggle fullscreen on the stage. Must be invoked from a user gesture
+        // (button click or F keypress both qualify). The fixed 800x600
+        // framebuffer is unchanged either way — the CSS just scales the canvas
+        // up with letterboxing. Prefer the real Fullscreen API; if it's missing
+        // (iOS) or the request rejects, use the CSS fallback so the button does
+        // something everywhere, including mobile.
+        function toggleFullscreen() {
+          if (nativeElement()) {
+            nativeExit();
+          } else if (pseudoActive()) {
+            setPseudoFullscreen(false);
+          } else {
+            var req = nativeRequest();
+            if (req) {
+              var p = req();
+              if (p && p.catch) {
+                p.catch(function () { setPseudoFullscreen(true); });
+              }
+            } else {
+              setPseudoFullscreen(true);
+            }
+          }
+          refocusCanvas();
+        }
+
+        // Keep the button's icon/label in sync with the actual state so the user
+        // gets a clear "exit fullscreen" affordance once they're in.
+        function updateFullscreenButton() {
+          var on = !!nativeElement() || pseudoActive();
+          fullscreenButton.textContent = on ? "🗗" : "⛶";
+          fullscreenButton.title = on ? "Exit fullscreen (F)" : "Fullscreen (F)";
+        }
+
         fullscreenButton.addEventListener("click", toggleFullscreen);
+        ["fullscreenchange", "webkitfullscreenchange", "msfullscreenchange"].forEach(
+          function (evt) { document.addEventListener(evt, updateFullscreenButton); }
+        );
+
+        // On rotate, the dvh/dvw-based CSS re-fits the canvas automatically; we
+        // just nudge focus back and let the layout settle. The 800x600
+        // framebuffer never changes, so the game keeps its 4:3 view, now scaled
+        // to the new orientation.
+        window.addEventListener("orientationchange", refocusCanvas);
+        window.addEventListener("resize", refocusCanvas);
 
         // Keep keyboard input flowing to the game without scrolling the page.
         window.addEventListener(
@@ -292,6 +410,12 @@
           function (e) {
             if (e.key === "f" || e.key === "F") {
               toggleFullscreen();
+              e.preventDefault();
+              return;
+            }
+            // Esc exits the CSS fallback (the native API handles its own Esc).
+            if (e.key === "Escape" && pseudoActive()) {
+              setPseudoFullscreen(false);
               e.preventDefault();
               return;
             }

@@ -47,6 +47,17 @@ pub const MAX_SPARKS: usize = 64; // Maximum number of falling sparks
 pub const POINTS_PER_STOMP: i32 = 100;
 pub const INITIAL_LIVES: i32 = 3;
 
+// Power stomp — reward for smashing a bug at high fall speed (a well-timed big
+// jump from a high platform). Landing on a bug while falling at or above this
+// speed triggers a stronger POW sound, a screen shake, and double points.
+pub const POWER_STOMP_MIN_FALL_SPEED: f32 = 600.0; // pixels/second (downward vy)
+pub const POWER_STOMP_MULTIPLIER: i32 = 2; // points multiplier on a power stomp
+pub const POWER_STOMP_VOLUME: f32 = 1.0; // louder than the normal stomp SFX
+
+// Screen shake (used by the power stomp for a satisfying impact)
+pub const SCREEN_SHAKE_DURATION: f32 = 0.35; // seconds the shake lasts
+pub const SCREEN_SHAKE_MAGNITUDE: f32 = 7.0; // peak camera offset in pixels
+
 // Colors (retro hardware theme)
 pub const BACKGROUND_COLOR = rl.Color{ .r = 20, .g = 30, .b = 40, .a = 255 }; // Dark PCB green-blue
 pub const PLATFORM_COLOR = rl.Color{ .r = 60, .g = 90, .b = 60, .a = 255 }; // PCB substrate green

@@ -207,13 +207,17 @@ pub const Bug = struct {
         }
     }
 
-    pub fn stomp(self: *Self) void {
+    /// Squash this bug. `play_squish` plays the normal squish SFX; a power stomp
+    /// passes false because it plays its own stronger POW instead.
+    pub fn stomp(self: *Self, play_squish: bool) void {
         self.state = .dying;
         self.death_timer = 0;
         self.vx = 0;
         self.vy = 0;
-        // Play stomp sound effect (bug squish)
-        audio.playSfx(.Stomp, config.SFX_VOLUME);
+        if (play_squish) {
+            // Play stomp sound effect (bug squish)
+            audio.playSfx(.Stomp, config.SFX_VOLUME);
+        }
     }
 
     pub fn getRect(self: *const Self) rl.Rectangle {
@@ -313,9 +317,13 @@ pub const BugManager = struct {
         }
     }
 
-    pub fn checkPlayerCollision(self: *Self, player: *Player, dt: f32) void {
-        if (player.invincible_timer > 0) return;
+    /// Resolve player/bug overlaps for this frame. Returns true if the player
+    /// pulled off a *power stomp* (smashing a bug while falling fast, e.g. from a
+    /// big jump off a high platform) so the caller can trigger a screen shake.
+    pub fn checkPlayerCollision(self: *Self, player: *Player, dt: f32) bool {
+        if (player.invincible_timer > 0) return false;
 
+        var power_stomped = false;
         const player_rect = player.getRect();
 
         for (0..self.count) |i| {
@@ -338,11 +346,22 @@ pub const BugManager = struct {
                     (player_bottom <= bug_top + 8 or prev_bottom <= bug_top + 8);
 
                 if (is_stomping) {
-                    // Stomp the bug!
-                    // Play pounce sound (impact before bounce)
-                    audio.playSfx(.Pounce, config.SFX_VOLUME * 0.8);
-                    bug.stomp();
-                    player.addScore(config.POINTS_PER_STOMP);
+                    // A power stomp lands at high fall speed — the reward for a
+                    // well-timed big jump. It plays a stronger POW, awards double
+                    // points, and signals the caller to shake the screen.
+                    const is_power = player.vy >= config.POWER_STOMP_MIN_FALL_SPEED;
+
+                    if (is_power) {
+                        audio.playPowStomp(config.POWER_STOMP_VOLUME);
+                        bug.stomp(false); // POW replaces the normal squish
+                        player.addScore(config.POINTS_PER_STOMP * config.POWER_STOMP_MULTIPLIER);
+                        power_stomped = true;
+                    } else {
+                        // Normal stomp: play pounce sound (impact before bounce).
+                        audio.playSfx(.Pounce, config.SFX_VOLUME * 0.8);
+                        bug.stomp(true);
+                        player.addScore(config.POINTS_PER_STOMP);
+                    }
                     player.bounce();
                 } else {
                     // Player takes damage
@@ -350,6 +369,8 @@ pub const BugManager = struct {
                 }
             }
         }
+
+        return power_stomped;
     }
 
     pub fn render(self: *const Self) void {

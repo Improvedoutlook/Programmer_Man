@@ -21,6 +21,12 @@ const SFX_COUNT = 3; // Number of SfxType variants
 var sfx_sounds: [SFX_COUNT]rl.Sound = undefined;
 var sfx_loaded: bool = false;
 
+// The "power stomp" POW is synthesized procedurally (see generatePowWave) rather
+// than loaded from disk, so it needs no authored asset and behaves identically on
+// native and web builds. It is a heavier, lower-pitched cousin of the normal stomp.
+var pow_sound: rl.Sound = undefined;
+var pow_loaded: bool = false;
+
 const sfx_paths = [SFX_COUNT][:0]const u8{
     "assets/audio/jump.wav",
     "assets/audio/pounce.wav",
@@ -37,7 +43,90 @@ pub fn loadSfx() void {
             continue;
         };
     }
+
+    // Synthesize the power-stomp POW and keep it resident alongside the file SFX.
+    const pow_wave = generatePowWave();
+    pow_sound = rl.loadSoundFromWave(pow_wave);
+    rl.unloadWave(pow_wave);
+    pow_loaded = true;
+
     sfx_loaded = true;
+}
+
+/// Play the procedural "POW!" for a power stomp — a beefier, lower impact than the
+/// regular stomp. `volume` is 0.0 to 1.0.
+pub fn playPowStomp(volume: f32) void {
+    if (!pow_loaded) return;
+    if (pow_sound.frameCount == 0) return;
+    rl.setSoundVolume(pow_sound, volume);
+    rl.playSound(pow_sound);
+}
+
+/// Build a loud, bomb-like "POW" impact wave for a power stomp. Designed to be
+/// perceptibly louder than the regular stomp: the energy sits in the audible
+/// mid-low band (not near-inaudible sub-bass), a sharp noise "crack" opens the
+/// hit, and the whole thing is driven through a tanh saturator so its RMS — what
+/// the ear reads as loudness — sits close to full scale rather than just peaking
+/// there briefly. Mono 22050 Hz 16-bit — the same format family as the chiptune.
+fn generatePowWave() rl.Wave {
+    const sample_rate: u32 = 22050;
+    const duration: f32 = 0.45; // seconds — a longer, booming tail
+    const frame_count: u32 = @intFromFloat(@as(f32, @floatFromInt(sample_rate)) * duration);
+
+    var wave = rl.Wave{
+        .frameCount = frame_count,
+        .sampleRate = sample_rate,
+        .sampleSize = 16,
+        .channels = 1,
+        .data = undefined,
+    };
+
+    const data_size = frame_count * @sizeOf(i16);
+    wave.data = @ptrCast(rl.memAlloc(@intCast(data_size)));
+    const samples: [*]i16 = @ptrCast(@alignCast(wave.data));
+
+    // Simple deterministic LCG so the noise burst is reproducible and needs no state.
+    var rng: u32 = 0x1234_5678;
+
+    // Accumulated oscillator phase so the pitch sweep stays continuous (computing
+    // sin(freq*t) directly would glitch as freq changes). Radians.
+    var phase: f32 = 0;
+
+    const two_pi: f32 = 2.0 * std.math.pi;
+    const sr_f: f32 = @floatFromInt(sample_rate);
+
+    var i: u32 = 0;
+    while (i < frame_count) : (i += 1) {
+        const t: f32 = @as(f32, @floatFromInt(i)) / sr_f;
+        const progress: f32 = t / duration; // 0 -> 1
+
+        // Pitch dives from a punchy ~300 Hz down to a chesty ~55 Hz — kept out of
+        // the near-inaudible sub-bass so it reads loud on laptop/phone speakers.
+        const freq: f32 = 55.0 + 245.0 * @exp(-progress * 6.0);
+        phase += two_pi * freq / sr_f;
+        const tone: f32 = @sin(phase);
+        // A little square-ish grit an octave up thickens the body.
+        const grit: f32 = @sin(phase * 2.0) * 0.3;
+
+        // White-noise "crack" transient, concentrated at the very start.
+        rng = rng *% 1_664_525 +% 1_013_904_223;
+        const noise: f32 = (@as(f32, @floatFromInt(rng >> 8 & 0xFFFF)) / 32768.0) - 1.0;
+        const noise_env: f32 = @exp(-progress * 22.0); // decays fast
+
+        // Very sharp attack, slow booming decay so the hit sustains and hits hard.
+        const attack: f32 = @min(t / 0.002, 1.0);
+        const body_env: f32 = @exp(-progress * 3.2);
+
+        const raw: f32 = (tone + grit + noise * noise_env * 0.9) * body_env * attack;
+
+        // Drive hard through a soft saturator: pushes RMS (perceived loudness) up
+        // toward the peak instead of leaving a spiky, quiet-feeling waveform.
+        const saturated: f32 = std.math.tanh(raw * 3.0);
+
+        samples[i] = @intFromFloat(saturated * 32000.0);
+    }
+
+    return wave;
 }
 
 /// Play a sound effect with the given volume (0.0 to 1.0).
@@ -62,6 +151,12 @@ pub fn unloadSfx() void {
             rl.unloadSound(sfx_sounds[i]);
         }
     }
+
+    if (pow_loaded and pow_sound.frameCount > 0) {
+        rl.unloadSound(pow_sound);
+    }
+    pow_loaded = false;
+
     sfx_loaded = false;
 }
 

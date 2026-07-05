@@ -189,6 +189,9 @@ pub const Game = struct {
     /// native there is no such restriction, so audio is armed from the start
     /// and behaviour is unchanged. (PM_BrowserGameplay.md Phase 4.)
     audio_armed: bool,
+    /// Seconds of screen shake remaining. Set by a power stomp; counts down each
+    /// frame and jitters the camera in render() while positive.
+    shake_timer: f32,
 
     const Self = @This();
     const MAX_LEVELS: u8 = 4; // Total number of levels (Level 1 = index 0, ..., Level 4 = index 3)
@@ -233,6 +236,7 @@ pub const Game = struct {
             // Native: armed immediately (no autoplay restriction). Web: wait
             // for the first user gesture before starting any track.
             .audio_armed = builtin.target.os.tag != .emscripten,
+            .shake_timer = 0,
         };
 
         // Only start the opening track now if audio is already armed (native).
@@ -498,6 +502,14 @@ pub const Game = struct {
             self.state = .credits;
         }
 
+        // Decay any active power-stomp screen shake. Done here (not in
+        // updatePlaying) so it keeps settling even if the player pauses or the
+        // state changes mid-shake, rather than freezing the camera jittered.
+        if (self.shake_timer > 0) {
+            self.shake_timer -= dt;
+            if (self.shake_timer < 0) self.shake_timer = 0;
+        }
+
         self.tilemap.updateBackground(dt);
         const input = controls.poll();
         self.has_gamepad = input.has_gamepad;
@@ -581,8 +593,11 @@ pub const Game = struct {
             self.tilemap.getLevelPixelHeight(),
         );
 
-        // Check player-enemy collisions
-        self.bugs.checkPlayerCollision(&self.player, dt);
+        // Check player-enemy collisions. A power stomp (smashing a bug at high
+        // fall speed) kicks off a screen shake for extra impact.
+        if (self.bugs.checkPlayerCollision(&self.player, dt)) {
+            self.shake_timer = config.SCREEN_SHAKE_DURATION;
+        }
 
         // Check player-spark collisions
         self.sparks.checkPlayerCollision(&self.player);
@@ -719,6 +734,18 @@ pub const Game = struct {
         }
     }
 
+    /// Current per-frame camera jitter for the power-stomp screen shake. Returns
+    /// a zero vector when no shake is active. The magnitude eases out linearly as
+    /// the timer runs down so the shake settles instead of cutting off abruptly.
+    fn shakeOffset(self: *const Self) rl.Vector2 {
+        if (self.shake_timer <= 0) return .{ .x = 0, .y = 0 };
+        const falloff = self.shake_timer / config.SCREEN_SHAKE_DURATION; // 1 -> 0
+        const mag = config.SCREEN_SHAKE_MAGNITUDE * falloff;
+        const rx: f32 = @floatFromInt(rl.getRandomValue(-100, 100));
+        const ry: f32 = @floatFromInt(rl.getRandomValue(-100, 100));
+        return .{ .x = (rx / 100.0) * mag, .y = (ry / 100.0) * mag };
+    }
+
     pub fn render(self: *Self) void {
         if (self.state == .credits) {
             self.renderCredits();
@@ -757,6 +784,14 @@ pub const Game = struct {
         }
 
         // === World-space rendering (scrolls with camera) ===
+        // Jitter the camera while a power-stomp shake is active. The offset is
+        // saved and restored around the draw so the shake never accumulates and
+        // camera.follow (which only sets target) stays unaffected.
+        const shake = self.shakeOffset();
+        const base_offset = self.camera.rl_camera.offset;
+        self.camera.rl_camera.offset.x = base_offset.x + shake.x;
+        self.camera.rl_camera.offset.y = base_offset.y + shake.y;
+
         self.camera.rl_camera.begin();
         {
             // Render background first
@@ -788,6 +823,8 @@ pub const Game = struct {
             }
         }
         self.camera.rl_camera.end();
+        // Restore the un-jittered offset for the next frame's follow/clamp logic.
+        self.camera.rl_camera.offset = base_offset;
 
         // === Screen-space rendering (HUD & overlays — not affected by camera) ===
         self.player.renderHUD(self.has_gamepad, self.gamepad_name);

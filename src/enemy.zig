@@ -324,50 +324,69 @@ pub const BugManager = struct {
         if (player.invincible_timer > 0) return false;
 
         var power_stomped = false;
+        var any_stomp = false;
+        var took_damage = false;
         const player_rect = player.getRect();
+
+        // Snapshot the fall velocity and foot position once, before resolving any
+        // bug. player.bounce() flips vy upward, so if we read player.vy inside the
+        // loop, a second bug clustered at the same spot would see the post-bounce
+        // (upward) velocity and misread the stomp as a side hit — squashing one bug
+        // but taking damage from its neighbour. Deciding every bug against the
+        // start-of-frame descent keeps a multi-bug stomp a clean multi-stomp.
+        const fall_vy = player.vy;
+        const player_bottom = player_rect.y + player_rect.height;
+        // Swept check: at high fall speeds the player can move further than the
+        // stomp window in a single frame, tunnelling past the bug's top so a stomp
+        // reads as a side hit. Reconstruct the previous foot position and treat it
+        // as a stomp if the feet were above the bug before this frame's descent,
+        // not only if they land in the window.
+        const prev_bottom = player_bottom - fall_vy * dt;
 
         for (0..self.count) |i| {
             var bug = &self.bugs[i];
             if (!bug.active or bug.state != .walking) continue;
 
             const bug_rect = bug.getRect();
+            if (!rl.checkCollisionRecs(player_rect, bug_rect)) continue;
 
-            if (rl.checkCollisionRecs(player_rect, bug_rect)) {
-                // Check if player is stomping (falling and hitting from above).
-                const player_bottom = player_rect.y + player_rect.height;
-                const bug_top = bug_rect.y;
-                // Swept check: at high fall speeds the player can move further than
-                // the stomp window in a single frame, tunnelling past the bug's top
-                // so a stomp reads as a side hit. Reconstruct the previous foot
-                // position and treat it as a stomp if the feet were above the bug
-                // before this frame's descent, not only if they land in the window.
-                const prev_bottom = player_bottom - player.vy * dt;
-                const is_stomping = player.vy > 0 and
-                    (player_bottom <= bug_top + 8 or prev_bottom <= bug_top + 8);
+            // Check if player is stomping (falling and hitting from above).
+            const bug_top = bug_rect.y;
+            const is_stomping = fall_vy > 0 and
+                (player_bottom <= bug_top + 8 or prev_bottom <= bug_top + 8);
 
-                if (is_stomping) {
-                    // A power stomp lands at high fall speed — the reward for a
-                    // well-timed big jump. It plays a stronger POW, awards double
-                    // points, and signals the caller to shake the screen.
-                    const is_power = player.vy >= config.POWER_STOMP_MIN_FALL_SPEED;
+            if (is_stomping) {
+                // A power stomp lands at high fall speed — the reward for a
+                // well-timed big jump. It plays a stronger POW, awards double
+                // points, and signals the caller to shake the screen.
+                const is_power = fall_vy >= config.POWER_STOMP_MIN_FALL_SPEED;
 
-                    if (is_power) {
-                        audio.playPowStomp(config.POWER_STOMP_VOLUME);
-                        bug.stomp(false); // POW replaces the normal squish
-                        player.addScore(config.POINTS_PER_STOMP * config.POWER_STOMP_MULTIPLIER);
-                        power_stomped = true;
-                    } else {
-                        // Normal stomp: play pounce sound (impact before bounce).
-                        audio.playSfx(.Pounce, config.SFX_VOLUME * 0.8);
-                        bug.stomp(true);
-                        player.addScore(config.POINTS_PER_STOMP);
-                    }
-                    player.bounce();
+                if (is_power) {
+                    audio.playPowStomp(config.POWER_STOMP_VOLUME);
+                    bug.stomp(false); // POW replaces the normal squish
+                    player.addScore(config.POINTS_PER_STOMP * config.POWER_STOMP_MULTIPLIER);
+                    power_stomped = true;
                 } else {
-                    // Player takes damage
-                    player.takeDamage();
+                    // Normal stomp: play pounce sound (impact before bounce).
+                    audio.playSfx(.Pounce, config.SFX_VOLUME * 0.8);
+                    bug.stomp(true);
+                    player.addScore(config.POINTS_PER_STOMP);
                 }
+                any_stomp = true;
+            } else {
+                took_damage = true;
             }
+        }
+
+        // Apply the frame's outcome once, after every overlapping bug is resolved.
+        // A single bounce covers a multi-bug stomp, and landing on top of any bug
+        // this frame shields the player from a same-frame side hit by another bug
+        // clustered at the same spot — you get every kill instead of a stray point
+        // of damage.
+        if (any_stomp) {
+            player.bounce();
+        } else if (took_damage) {
+            player.takeDamage();
         }
 
         return power_stomped;

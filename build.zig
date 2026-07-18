@@ -101,6 +101,32 @@ pub fn build(b: *std.Build) void {
 
         const run = rlz.emcc.emscriptenRunStep(b) catch @panic("emcc emscriptenRunStep failed");
         run.step.dependOn(&link.step);
+
+        // Static PWA sidecar files (web-app manifest + icons). These turn the
+        // page into an installable, true-fullscreen web app on mobile (see
+        // web/shell.html <head>). emcc only emits index.* into zig-out/htmlout/;
+        // without copying these next to it the deployed site 404s on the
+        // manifest and icons. .custom = "htmlout" resolves to that same
+        // zig-out/htmlout dir. Hooked to BOTH the install step (plain
+        // `zig build` / web.ps1 -BuildOnly) and the emrun serve step (run-web)
+        // so the files are present however the build is invoked.
+        const web_static = [_][]const u8{
+            "manifest.webmanifest",
+            "icon-180.png",
+            "icon-192.png",
+            "icon-512.png",
+            "icon-maskable-512.png",
+        };
+        for (web_static) |name| {
+            const inst = b.addInstallFileWithDir(
+                b.path(b.fmt("web/{s}", .{name})),
+                .{ .custom = "htmlout" },
+                name,
+            );
+            b.getInstallStep().dependOn(&inst.step);
+            run.step.dependOn(&inst.step);
+        }
+
         b.step("run-web", "Build & serve the web build via emrun")
             .dependOn(&run.step);
         return; // skip native-only test_exe / unit-test wiring for the web target

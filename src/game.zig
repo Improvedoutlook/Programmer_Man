@@ -179,6 +179,9 @@ pub const Game = struct {
     credits_scroll: f32,
     all_bugs_defeated: bool,
     terminal_pos: ?struct { x: i32, y: i32 },
+    /// Top-left tile coords of the Server Room door, or null if this level has
+    /// none. When null the level auto-optimizes at load so it stays completable.
+    server_door_pos: ?struct { x: i32, y: i32 },
     player_texture: ?rl.Texture2D,
     opening_texture: ?rl.Texture2D,
     game_complete: bool,
@@ -229,6 +232,7 @@ pub const Game = struct {
             .opening_texture = opening_texture,
             .all_bugs_defeated = false,
             .terminal_pos = null,
+            .server_door_pos = null,
             .player_texture = player_texture,
             .game_complete = false,
             .has_gamepad = false,
@@ -307,6 +311,9 @@ pub const Game = struct {
         // Reset terminal state
         self.all_bugs_defeated = false;
 
+        // Reset Server Room door (set from level data below when present)
+        self.server_door_pos = null;
+
         // Player spawn defaults (overridden by JSON data when available)
         var spawn_x: i32 = config.SPAWN_TILE_X;
         var spawn_y: i32 = config.SPAWN_TILE_Y;
@@ -363,6 +370,14 @@ pub const Game = struct {
                 self.spawnSparksLevel1();
                 self.terminal_pos = .{ .x = 6, .y = 28 };
             },
+        }
+
+        // Defensive: a level with no Server Room door (old JSON or the hardcoded
+        // createLevel1 fallback) has nothing to run the optimizing script, so it
+        // would soft-lock once dual-objective gating lands. Mark such levels
+        // optimized at load so they stay completable.
+        if (self.server_door_pos == null) {
+            self.tilemap.system_optimized = true;
         }
 
         // Switch background music based on level (only if not in opening state)
@@ -432,6 +447,9 @@ pub const Game = struct {
         }
 
         self.terminal_pos = .{ .x = level_data.terminal_x, .y = level_data.terminal_y };
+        if (level_data.has_server_door) {
+            self.server_door_pos = .{ .x = level_data.server_door_x, .y = level_data.server_door_y };
+        }
         spawn_x.* = level_data.player_spawn_x;
         spawn_y.* = level_data.player_spawn_y;
     }
@@ -623,6 +641,15 @@ pub const Game = struct {
             self.all_bugs_defeated = true;
         }
 
+        // Server Room door: entering runs the optimizing script. The full room
+        // scene arrives next; for now, stepping into the door and pressing submit
+        // optimizes the system directly.
+        if (self.playerAtServerDoor() and input.submit_pressed) {
+            // TODO(Phase 3): switch to the Server Room scene instead of
+            // optimizing the system immediately.
+            self.tilemap.system_optimized = true;
+        }
+
         // Check for terminal interaction to submit PR and win
         if (self.all_bugs_defeated) {
             if (self.terminal_pos) |term| {
@@ -808,6 +835,9 @@ pub const Game = struct {
             // Render terminal
             self.renderTerminal();
 
+            // Render Server Room door
+            self.renderServerDoor();
+
             // Render moving platforms (after tilemap, before bugs/player)
             self.moving_platforms.render();
 
@@ -836,6 +866,12 @@ pub const Game = struct {
         // Render terminal hint if all bugs defeated
         if (self.all_bugs_defeated and self.state == .playing) {
             self.renderTerminalHint();
+        }
+
+        // Prompt the player to enter the Server Room while standing at the door
+        // (suppressed once the system has been optimized).
+        if (self.state == .playing and self.playerAtServerDoor()) {
+            self.renderServerDoorHint();
         }
 
         // Render state-specific overlays
@@ -958,6 +994,82 @@ pub const Game = struct {
             prompt_color.a = alpha;
             rl.drawText(prompt, prompt_x, config.SCREEN_HEIGHT - 40, 18, prompt_color);
         }
+    }
+
+    /// True when the player is overlapping the Server Room door and the system
+    /// is not yet optimized (the door is a one-shot per level).
+    fn playerAtServerDoor(self: *const Self) bool {
+        if (self.tilemap.system_optimized) return false;
+        if (self.server_door_pos) |door| {
+            const dx = @as(f32, @floatFromInt(door.x * config.TILE_SIZE));
+            const dy = @as(f32, @floatFromInt(door.y * config.TILE_SIZE));
+            const dw: f32 = 16.0; // 1 tile wide
+            const dh: f32 = 32.0; // 2 tiles tall
+
+            const player_rect = self.player.getRect();
+            return player_rect.x < dx + dw and
+                player_rect.x + player_rect.width > dx and
+                player_rect.y < dy + dh and
+                player_rect.y + player_rect.height > dy;
+        }
+        return false;
+    }
+
+    /// Draw the Server Room door in the world: a 16x32 doorway with a recessed
+    /// panel, an "SRV" label, and a top-center indicator that blinks urgently
+    /// while the system is still bugged, then glows steady green once optimized.
+    fn renderServerDoor(self: *Self) void {
+        if (self.server_door_pos) |door| {
+            const px = door.x * config.TILE_SIZE;
+            const py = door.y * config.TILE_SIZE;
+            const w: i32 = 16;
+            const h: i32 = 32;
+
+            // Dark outer frame
+            rl.drawRectangle(px, py, w, h, rl.Color{ .r = 40, .g = 44, .b = 52, .a = 255 });
+
+            // Recessed inner panel
+            rl.drawRectangle(px + 2, py + 5, w - 4, h - 7, rl.Color{ .r = 22, .g = 26, .b = 32, .a = 255 });
+
+            // "SRV" label
+            rl.drawText("SRV", px + 1, py + 13, 8, rl.Color{ .r = 90, .g = 110, .b = 135, .a = 255 });
+
+            // Indicator light, top-center.
+            const cx = px + @divTrunc(w, 2);
+            const cy = py + 3;
+            const light_color = if (self.tilemap.system_optimized)
+                rl.Color{ .r = 0, .g = 220, .b = 100, .a = 255 } // steady green
+            else blk: {
+                // Fast urgent blink while the system is still bugged.
+                const on = @sin(self.tilemap.background_time * 9.0) > 0.0;
+                break :blk if (on)
+                    rl.Color{ .r = 235, .g = 60, .b = 50, .a = 255 }
+                else
+                    rl.Color{ .r = 70, .g = 20, .b = 20, .a = 255 };
+            };
+            rl.drawCircle(cx, cy, 2, light_color);
+
+            // Border highlight
+            rl.drawRectangleLines(px, py, w, h, rl.Color{ .r = 80, .g = 90, .b = 100, .a = 255 });
+        }
+    }
+
+    /// Screen-space "enter the Server Room" prompt shown while at the door.
+    fn renderServerDoorHint(self: *Self) void {
+        var hint_buf: [128]u8 = undefined;
+        const submit_prompt = controls.getActionPrompt(.submit, self.has_gamepad);
+        const hint = std.fmt.bufPrintZ(&hint_buf, "Press {s} to enter the Server Room", .{submit_prompt}) catch "Press to enter the Server Room";
+        const hint_y: i32 = 125;
+
+        const hint_text_width: i32 = rl.measureText(hint, 18);
+        const padding: i32 = 10;
+        const hint_x: i32 = @divTrunc(config.SCREEN_WIDTH - hint_text_width, 2);
+
+        var bg_color = rl.Color.black;
+        bg_color.a = 180;
+        rl.drawRectangle(hint_x - padding, hint_y - 5, hint_text_width + (padding * 2), 30, bg_color);
+
+        rl.drawText(hint, hint_x, hint_y, 18, config.HUD_COLOR);
     }
 
     fn renderTerminal(self: *Self) void {

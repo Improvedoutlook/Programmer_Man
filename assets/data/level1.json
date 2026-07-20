@@ -5,6 +5,7 @@
     "height": 37,
     "spawn": { "x": 3, "y": 35 },
     "terminal": { "x": 6, "y": 28 },
+    "server_door": { "x": 56, "y": 30 },
     "ground": {
         "y": 35,
         "segments": [

@@ -781,6 +781,9 @@ const JsonLevelSchema = struct {
     bugs: []const JsonBug,
     // Optional — Levels 1–3 omit this and default to an empty slice.
     moving_platforms: []const JsonMovingPlatform = &.{},
+    // Optional — top-left tile coords of the Server Room door (1x2 tiles).
+    // Levels without it default to null and auto-optimize at load.
+    server_door: ?JsonCoord = null,
 };
 
 pub const MAX_SPAWN_ENTRIES: usize = 32;
@@ -827,6 +830,9 @@ pub const LevelData = struct {
     spark_count: usize,
     moving_platforms: [MAX_MOVING_PLATFORMS]MovingPlatformSpawn,
     moving_platform_count: usize,
+    server_door_x: i32,
+    server_door_y: i32,
+    has_server_door: bool,
 };
 
 fn jsonTileType(name: []const u8) TileType {
@@ -899,7 +905,17 @@ pub fn loadLevelFromJson(tilemap: *Tilemap, path: []const u8) !LevelData {
         .spark_count = 0,
         .moving_platforms = undefined,
         .moving_platform_count = 0,
+        .server_door_x = 0,
+        .server_door_y = 0,
+        .has_server_door = false,
     };
+
+    // Optional Server Room door
+    if (level.server_door) |door| {
+        result.server_door_x = door.x;
+        result.server_door_y = door.y;
+        result.has_server_door = true;
+    }
 
     // Collect bug spawns
     for (level.bugs) |bug| {

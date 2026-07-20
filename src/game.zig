@@ -1031,8 +1031,13 @@ pub const Game = struct {
             // Recessed inner panel
             rl.drawRectangle(px + 2, py + 5, w - 4, h - 7, rl.Color{ .r = 22, .g = 26, .b = 32, .a = 255 });
 
-            // "SRV" label
-            rl.drawText("SRV", px + 1, py + 13, 8, rl.Color{ .r = 90, .g = 110, .b = 135, .a = 255 });
+            // "SRV" label, centered on the door and resting just above the top
+            // frame (the door is only 16px wide, so the label overhangs the sides
+            // rather than being squeezed inside the frame).
+            const label = "SRV";
+            const label_size = 8;
+            const label_w = rl.measureText(label, label_size);
+            rl.drawText(label, px + @divTrunc(w - label_w, 2), py - 10, label_size, rl.Color{ .r = 90, .g = 110, .b = 135, .a = 255 });
 
             // Indicator light, top-center.
             const cx = px + @divTrunc(w, 2);

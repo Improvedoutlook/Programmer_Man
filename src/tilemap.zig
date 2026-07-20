@@ -27,6 +27,10 @@ pub const Tilemap = struct {
     level_height: i32, // Runtime level height in tiles
     background_theme: BackgroundTheme,
     background_time: f32,
+    /// System state: false = badly bugged (chaotic light flicker),
+    /// true = optimized (ordered sequential chase). Set once the player runs
+    /// the optimizing script; every level rebuilds the tilemap and starts false.
+    system_optimized: bool,
 
     const Self = @This();
 
@@ -41,6 +45,7 @@ pub const Tilemap = struct {
             .level_height = h,
             .background_theme = .motherboard,
             .background_time = 0.0,
+            .system_optimized = false,
         };
         // Initialize all tiles within level bounds to empty
         for (0..@intCast(h)) |y| {
@@ -327,7 +332,8 @@ pub const Tilemap = struct {
 
         var beam_x: i32 = 52;
         while (beam_x < lw) : (beam_x += 172) {
-            const beam_alpha: u8 = @intFromFloat(30.0 + (@sin(self.background_time * 2.0 + @as(f32, @floatFromInt(beam_x)) * 0.02) + 1.0) * 22.0);
+            // Chaos: beams strobe erratically; optimized: slow synchronized breathing.
+            const beam_alpha: u8 = @intFromFloat(30.0 + self.lightSignal(beam_x * 13, 0, 2.0, 0.0) * 44.0);
             rl.drawRectangle(beam_x, 0, 10, lh, rl.Color{ .r = 78, .g = 34, .b = 64, .a = beam_alpha });
             rl.drawRectangle(beam_x + 3, 0, 4, lh, rl.Color{ .r = 255, .g = 136, .b = 102, .a = beam_alpha + 20 });
         }
@@ -404,15 +410,22 @@ pub const Tilemap = struct {
 
         rl.drawRectangle(x, y, width, thickness, base_color);
 
+        const bus_light_seed = x * 13 + y * 7;
         var packet_index: i32 = 0;
         while (packet_index < 4) : (packet_index += 1) {
             const packet_seed = self.hashFloat(x * 19 + y * 23 + width * 5 + packet_index * 97 + @as(i32, @intFromFloat(phase * 140.0)));
             const packet_width: i32 = 10 + @as(i32, @intFromFloat(packet_seed * 18.0));
             const packet_gap: i32 = 24 + @as(i32, @intFromFloat(packet_seed * 36.0));
             const packet_offset = packet_index * (packet_gap + 18) + @as(i32, @intFromFloat(packet_seed * 30.0));
-            const packet_x = pulse_x - packet_offset;
-            const glow = 0.65 + 0.35 * (@sin(self.background_time * 4.8 + phase * 2.0 + @as(f32, @floatFromInt(packet_index)) * 1.1) * 0.5 + 0.5);
+            var packet_x = pulse_x - packet_offset;
+            const glow = self.lightSignal(bus_light_seed, packet_index, 4.8, phase * 2.0);
             const packet_alpha: u8 = @intFromFloat(110.0 + glow * 120.0);
+
+            // Chaos: scramble bus traffic by jittering each packet ±6 px;
+            // when optimized, packets glide along their exact track.
+            if (!self.system_optimized) {
+                packet_x += @as(i32, @intFromFloat(self.lightSignal(bus_light_seed, packet_index + 13, 0.0, 0.0) * 12.0)) - 6;
+            }
 
             rl.drawRectangle(packet_x, y - 1, packet_width, thickness + 2, rl.Color{
                 .r = pulse_color.r,
@@ -443,6 +456,20 @@ pub const Tilemap = struct {
     fn hashFloat(_: *const Self, value: i32) f32 {
         const x = @as(f32, @floatFromInt(@mod(value * 73 + 19, 997)));
         return x / 997.0;
+    }
+
+    /// Intensity 0..1 for light `index` of an element identified by `seed`.
+    /// Un-optimized: time-quantized deterministic noise — each light flips
+    /// independently every ~90 ms with no spatial or temporal pattern (chaos).
+    /// Optimized: an ordered chase — lights march on one after another.
+    /// Needs no mutable state, so it stays callable from `*const` render paths.
+    fn lightSignal(self: *const Self, seed: i32, index: i32, speed: f32, phase: f32) f32 {
+        if (!self.system_optimized) {
+            const step: i32 = @intFromFloat(@floor(self.background_time / 0.09));
+            return self.hashFloat(seed * 31 + index * 57 + step * 101);
+        }
+        const wave = @sin(self.background_time * speed - @as(f32, @floatFromInt(index)) * 0.9 + phase);
+        return wave * 0.5 + 0.5;
     }
 
     fn drawCoolingFan(self: *const Self, cx: i32, cy: i32, radius: i32, blade_count: i32, spin_speed: f32, housing_color: rl.Color, blade_color: rl.Color) void {
@@ -498,9 +525,10 @@ pub const Tilemap = struct {
             rl.drawRectangle(pin_x, y + height, 6, 3, rl.Color{ .r = 156, .g = 144, .b = 90, .a = 180 });
         }
 
+        const led_seed = x * 13 + y * 7;
         var led: i32 = 0;
         while (led < 4) : (led += 1) {
-            const led_on = @sin(self.background_time * 3.2 + phase + @as(f32, @floatFromInt(led)) * 0.8) > 0.0;
+            const led_on = self.lightSignal(led_seed, led, 3.2, phase) >= 0.5;
             const led_color = if (led_on)
                 accent_color
             else
@@ -531,14 +559,19 @@ pub const Tilemap = struct {
         const cell_gap: i32 = 6;
         const cell_width = @divTrunc(width - 34, 2);
         const cell_height = @divTrunc(height - 38, 2);
+        const cell_seed = x * 13 + y * 7;
         var row: i32 = 0;
         while (row < 2) : (row += 1) {
             var col: i32 = 0;
             while (col < 2) : (col += 1) {
                 const cell_x = x + 16 + col * (cell_width + cell_gap);
                 const cell_y = y + 16 + row * (cell_height + cell_gap);
-                const pulse = 0.45 + 0.55 * (@sin(self.background_time * 2.8 + phase + @as(f32, @floatFromInt(row * 2 + col)) * 0.9) * 0.5 + 0.5);
-                const glow_alpha: u8 = @intFromFloat(70.0 + pulse * 120.0);
+                const signal = self.lightSignal(cell_seed, row * 2 + col, 2.8, phase);
+                // Chaos: each cell's alpha jumps discretely; optimized: smooth breathing.
+                const glow_alpha: u8 = if (self.system_optimized)
+                    @intFromFloat(70.0 + signal * 120.0)
+                else
+                    @intFromFloat(70.0 + signal * 150.0);
                 rl.drawRectangle(cell_x, cell_y, cell_width, cell_height, rl.Color{ .r = core_color.r, .g = core_color.g, .b = core_color.b, .a = 230 });
                 rl.drawRectangle(cell_x + 4, cell_y + 4, cell_width - 8, cell_height - 8, rl.Color{
                     .r = energy_color.r,
@@ -551,9 +584,10 @@ pub const Tilemap = struct {
     }
 
     fn drawLightStrip(self: *const Self, x: i32, y: i32, count: i32, spacing: i32, off_color: rl.Color, on_color: rl.Color, phase: f32) void {
+        const strip_seed = x * 13 + y * 7;
         var light: i32 = 0;
         while (light < count) : (light += 1) {
-            const active = @sin(self.background_time * 4.0 + phase + @as(f32, @floatFromInt(light)) * 0.55) > -0.1;
+            const active = self.lightSignal(strip_seed, light, 4.0, phase) >= 0.45;
             const color = if (active) on_color else off_color;
             rl.drawRectangle(x + light * spacing, y, 8, 4, color);
         }
@@ -686,7 +720,7 @@ pub const Tilemap = struct {
         );
         // Pulsing indicator on face
         const pulse: u8 = @intFromFloat(
-            70.0 + (@sin(self.background_time * 2.8 + phase) * 0.5 + 0.5) * 95.0,
+            70.0 + self.lightSignal(x * 13 + y * 7, 0, 2.8, phase) * 95.0,
         );
         rl.drawCircle(
             x + @divTrunc(width, 2),

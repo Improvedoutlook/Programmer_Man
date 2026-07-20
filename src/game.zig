@@ -502,6 +502,10 @@ pub const Game = struct {
             self.state = .credits;
         }
 
+        // DEBUG: F11 toggles system optimization to preview the chaotic vs.
+        // ordered background light states. Temporary preview aid.
+        if (rl.isKeyPressed(.f11)) self.tilemap.system_optimized = !self.tilemap.system_optimized;
+
         // Decay any active power-stomp screen shake. Done here (not in
         // updatePlaying) so it keeps settling even if the player pauses or the
         // state changes mid-shake, rather than freezing the camera jittered.

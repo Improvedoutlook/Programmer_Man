@@ -17,10 +17,13 @@ Programmer_Man is a retro-style platformer where you play as a programmer naviga
 - **Classic platformer mechanics**: Run, jump, and stomp enemies
 - **Hardware-themed visuals**: PCB traces, chips, capacitors, and more
 - **Bug enemies**: Patrol-type enemies that can be defeated by jumping on them
+- **Power stomp**: Landing on a bug at high fall speed triggers a screen shake and double points; stomping two bugs at once doubles the bounce
+- **Server Room dual objective**: each level's background lights flicker chaotically until you find the level's door, enter the Server Room, and run the optimizing script — squashing all bugs *and* optimizing the system are both required before the PR terminal activates
 - **Moving platforms**: Horizontal and vertical platforms that carry the player
-- **Scoring system**: +100 points per bug stomped
+- **Scoring system**: +100 points per bug stomped (2x on a power stomp), +500 for optimizing the system
 - **Lives system**: 3 lives with respawn on death
 - **Opening screen**: Animated title screen with music before the first level
+- **End credits**: Scrolling credits roll with its own music after the final level
 - **Flexible input**: Keyboard, gamepad (desktop **and** in the browser), and on-screen touch controls
 - **Plays everywhere**: Native desktop build plus a WebAssembly build that runs in any browser — including tablets/phones via touch
 
@@ -96,8 +99,17 @@ Notes:
 ### Combat
 - Jump on bugs from above to stomp them
 - Stomping gives you a small bounce (60% of jump height)
+- Stomping while falling fast (power stomp) shakes the screen and awards double points
+- Stomping two bugs at the same spot at once gives an extra bounce
 - Side or bottom collision with bugs = death
 - Brief invincibility after respawning
+
+### Server Room
+- Every level starts "bugged": background LEDs, board lights, and data buses flicker randomly
+- Find the door near the middle of the level and enter the Server Room
+- Interact with the terminal to run `optimize.sh`; on completion the background lights switch to a clean, ordered chase pattern and you earn a score bonus
+- Squashing all bugs and optimizing the system can be done in either order — an on-screen hint always says what's left
+- The PR-submission terminal only activates once both tasks are complete
 
 ## Building
 
@@ -238,7 +250,8 @@ files to any static host:
 
 ✅ **Playable & Integrated**: Core gameplay systems are implemented and playable. Raylib rendering is integrated — tilemap, background, player sprite, and procedural enemy/tile rendering all work.  
 ✅ **Audio**: SFX and music playback are supported and asset files are included under `assets/audio/` and `assets/music/`.  
-✅ **Levels**: Four levels are provided as JSON (`level1.json`–`level4.json`) with a hardcoded fallback builder. Level 4 is "Silicon Ascent" — a vertical climb level.
+✅ **Levels**: Four levels are provided as JSON (`level1.json`–`level4.json`) with a hardcoded fallback builder. Level 4 is "Silicon Ascent" — a vertical climb level.  
+✅ **Server Room**: Each level has a dual objective (squash bugs + optimize the system via a Server Room terminal), with per-level room variants and chaotic/ordered background lighting.
 
 ### What's Implemented
 
@@ -255,7 +268,10 @@ files to any static host:
 - ✅ Graphics rendering (procedural tiles/enemies; player sprite support)
 - ✅ Audio playback (SFX and music streaming)
 - ✅ Parallax background and decorative elements
-- ✅ Game states (opening screen, playing, paused, game over, victory/level-complete)
+- ✅ Game states (opening screen, playing, paused, server room, game over, victory/level-complete, end credits)
+- ✅ Power stomp (high fall speed = double points + screen shake) and simultaneous double-bug stomp
+- ✅ Server Room dual objective (`serverroom.zig`) — chaotic vs. ordered background lights, per-level room variants, optimizing-script terminal, score bonus
+- ✅ End-credits roll with dedicated music
 - ✅ Centralized input handling (`controls.zig`) — keyboard, XInput gamepad, and raw GLFW fallback for unmapped controllers (desktop)
 - ✅ Browser gamepad support (Web Gamepad API; the desktop-only raw GLFW joystick path is compiled out on the web target)
 - ✅ Gesture touch controls (`touch.zig`) for tablets/phones — tap to jump, hold-and-swipe left/right to run (multitouch), a small pause button, and tap-to-confirm on menus; web-only and zero-cost on native
@@ -277,6 +293,7 @@ tile-based-raylib-game/
 │   ├── tilemap.zig     # Level tiles & collision
 │   ├── platform.zig    # Moving platform logic & player carry
 │   ├── hazards.zig     # Environmental hazards (sparks)
+│   ├── serverroom.zig  # Server Room scene — optimizing-script terminal & per-level variants
 │   ├── audio.zig       # Music + SFX playback
 │   ├── background.zig  # Parallax/background effects
 │   └── test_window.zig # Small test harness
@@ -291,14 +308,18 @@ tile-based-raylib-game/
 │   │   ├── jump.wav
 │   │   ├── pounce.wav
 │   │   └── stomp.wav
-│   ├── music/
-│   │   ├── lost_in_hyperspace.mp3
-│   │   ├── danger_streets.mp3
-│   │   └── lone_fighter.mp3
+│   ├── music/          # Title, level, victory, server-room, and credits tracks (9 files)
+│   ├── images/
+│   │   ├── PM_OpeningImage.png
+│   │   └── Screenshot.png
 │   └── sprites/
 │       └── player.png
 └── docs/
-    └── PRD.md          # Product Requirements
+    ├── PRD.md                    # Original Phase-1 product requirements
+    ├── PRD_EnhancedGameplay.md   # Server Room / dual-objective feature
+    ├── PRD_Level4.md             # "Silicon Ascent" vertical level
+    ├── PRD_Opening.md            # Opening/title screen
+    └── PM_BrowserGameplay.md     # WebAssembly browser port plan
 ```
 
 ## Technical Details
@@ -346,7 +367,7 @@ tile-based-raylib-game/
 
 ## Code Statistics
 
-- **~4.3k lines** of pure Zig game code
+- **~5.9k lines** of pure Zig game code
 - **Zero external dependencies** (except graphics library)
 - **Full physics simulation** with proper collision
 - **Complete game loop** with state management

@@ -535,10 +535,6 @@ pub const Game = struct {
             self.state = .credits;
         }
 
-        // DEBUG: F11 toggles system optimization to preview the chaotic vs.
-        // ordered background light states. Temporary preview aid.
-        if (rl.isKeyPressed(.f11)) self.tilemap.system_optimized = !self.tilemap.system_optimized;
-
         // Decay any active power-stomp screen shake. Done here (not in
         // updatePlaying) so it keeps settling even if the player pauses or the
         // state changes mid-shake, rather than freezing the camera jittered.
@@ -693,8 +689,9 @@ pub const Game = struct {
             if (self.music) |*music| music.switchTrack(server_room_music);
         }
 
-        // Check for terminal interaction to submit PR and win
-        if (self.all_bugs_defeated) {
+        // Check for terminal interaction to submit PR and win. Both objectives
+        // must be complete: all bugs squashed AND the system optimized.
+        if (self.all_bugs_defeated and self.tilemap.system_optimized) {
             if (self.terminal_pos) |term| {
                 const term_x = @as(f32, @floatFromInt(term.x * config.TILE_SIZE));
                 const term_y = @as(f32, @floatFromInt(term.y * config.TILE_SIZE));
@@ -915,9 +912,12 @@ pub const Game = struct {
         // === Screen-space rendering (HUD & overlays — not affected by camera) ===
         self.player.renderHUD(self.has_gamepad, self.gamepad_name);
 
-        // Render terminal hint if all bugs defeated
-        if (self.all_bugs_defeated and self.state == .playing) {
-            self.renderTerminalHint();
+        // Two-task status line under the HUD (bugs remaining + system state).
+        self.renderTaskStatus();
+
+        // Adaptive objective hint — always points at whatever task is left.
+        if (self.state == .playing) {
+            self.renderObjectiveHint();
         }
 
         // Prompt the player to enter the Server Room while standing at the door
@@ -1138,15 +1138,16 @@ pub const Game = struct {
             const body_color = rl.Color{ .r = 30, .g = 30, .b = 35, .a = 255 };
             rl.drawRectangle(px, py, 32, 32, body_color);
 
-            // Screen area
-            const screen_color = if (self.all_bugs_defeated)
+            // Screen area — lit only once both objectives are complete.
+            const terminal_active = self.all_bugs_defeated and self.tilemap.system_optimized;
+            const screen_color = if (terminal_active)
                 rl.Color{ .r = 0, .g = 200, .b = 100, .a = 255 } // Green when active
             else
                 rl.Color{ .r = 50, .g = 50, .b = 60, .a = 255 }; // Dim when inactive
             rl.drawRectangle(px + 3, py + 3, 26, 18, screen_color);
 
             // Terminal text/cursor
-            if (self.all_bugs_defeated) {
+            if (terminal_active) {
                 rl.drawText(">", px + 5, py + 5, 12, rl.Color.black);
             }
 
@@ -1158,11 +1159,55 @@ pub const Game = struct {
         }
     }
 
-    fn renderTerminalHint(self: *Self) void {
-        // Draw hint at top center of screen
-        var hint_buf: [128]u8 = undefined;
-        const submit_prompt = controls.getActionPrompt(.submit, self.has_gamepad);
-        const hint = std.fmt.bufPrintZ(&hint_buf, "Bugs squashed! Go to terminal and press {s}", .{submit_prompt}) catch "Bugs squashed! Go to terminal";
+    /// Compact two-item task checklist under the HUD: bugs remaining and system
+    /// state. Each item turns HUD-green when done, dim grey while outstanding.
+    /// ASCII only — the default font has no check glyph, so "OK"/"--" stand in.
+    fn renderTaskStatus(self: *Self) void {
+        const status_y: i32 = 105;
+        const pending = rl.Color{ .r = 150, .g = 150, .b = 160, .a = 255 };
+
+        // Bugs task.
+        const bugs_left = self.bugs.getActiveCount();
+        var bugs_buf: [32]u8 = undefined;
+        const bugs_text = if (self.all_bugs_defeated)
+            std.fmt.bufPrintZ(&bugs_buf, "BUGS [OK]", .{}) catch "BUGS [OK]"
+        else
+            std.fmt.bufPrintZ(&bugs_buf, "BUGS [{d} left]", .{bugs_left}) catch "BUGS [-- left]";
+        const bugs_color = if (self.all_bugs_defeated) config.HUD_COLOR else pending;
+        rl.drawText(bugs_text, 10, status_y, 16, bugs_color);
+
+        // System task, drawn just to the right of the bugs item.
+        const gap: i32 = 20;
+        const sys_x = 10 + rl.measureText(bugs_text, 16) + gap;
+        const sys_text = if (self.tilemap.system_optimized) "SYS [OK]" else "SYS [ERR]";
+        const sys_color = if (self.tilemap.system_optimized) config.HUD_COLOR else pending;
+        rl.drawText(sys_text, sys_x, status_y, 16, sys_color);
+    }
+
+    /// Adaptive objective hint. Points at whichever task is still outstanding —
+    /// bugs, the system optimization, or (once both are done) the PR terminal.
+    /// Silent early game while both tasks remain, matching the previous behavior.
+    fn renderObjectiveHint(self: *Self) void {
+        const bugs_done = self.all_bugs_defeated;
+        const system_done = self.tilemap.system_optimized;
+
+        if (bugs_done and !system_done) {
+            self.renderHintBox("Bugs squashed! Update the system in the Server Room");
+        } else if (system_done and !bugs_done) {
+            self.renderHintBox("System updated! Squash the remaining bugs");
+        } else if (bugs_done and system_done) {
+            var hint_buf: [128]u8 = undefined;
+            const submit_prompt = controls.getActionPrompt(.submit, self.has_gamepad);
+            const hint = std.fmt.bufPrintZ(&hint_buf, "All tasks complete! Submit your PR at the terminal — press {s}", .{submit_prompt}) catch "All tasks complete! Submit your PR at the terminal";
+            self.renderHintBox(hint);
+        }
+        // Neither done → no hint (unchanged early-game silence).
+    }
+
+    /// Draw a centered hint string near the top of the screen inside a dark
+    /// padded box sized to the text. Shared by every screen-space hint.
+    fn renderHintBox(self: *Self, hint: [:0]const u8) void {
+        _ = self;
         const hint_y: i32 = 90;
 
         // Measure the exact pixel width of the hint text and add padding so the

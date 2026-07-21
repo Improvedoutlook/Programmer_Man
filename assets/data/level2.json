@@ -1,10 +1,15 @@
 {
+    "meta": {
+        "tile_types": "solid, chip, capacitor, trace — see tilemap.zig TileType enum",
+        "server_door": "1x2-tile Server Room door; top-left tile coords; base must rest on a platform"
+    },
     "name": "Danger Streets",
     "description": "Level 2 - A treacherous network of platforms crawling with bugs!",
     "width": 110,
     "height": 37,
     "spawn": { "x": 3, "y": 35 },
     "terminal": { "x": 107, "y": 9 },
+    "server_door": { "x": 55, "y": 20 },
     "ground": {
         "y": 35,
         "segments": [

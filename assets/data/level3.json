@@ -1,7 +1,8 @@
 {
     "meta": {
         "tile_types": "solid, chip, capacitor, trace — see tilemap.zig TileType enum",
-        "ai_types": "walker (default), jumper (intermittent jumping)"
+        "ai_types": "walker (default), jumper (intermittent jumping)",
+        "server_door": "1x2-tile Server Room door; top-left tile coords; base must rest on a platform"
     },
     "name": "Lone Fighter",
     "description": "Level 3 - The final gauntlet! Jumping bugs guard the last terminal.",
@@ -9,6 +10,7 @@
     "height": 37,
     "spawn": { "x": 3, "y": 35 },
     "terminal": { "x": 116, "y": 6 },
+    "server_door": { "x": 62, "y": 29 },
     "music": "lone_fighter",
     "ground": {
         "y": 35,

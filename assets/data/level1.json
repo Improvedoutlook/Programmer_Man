@@ -1,4 +1,8 @@
 {
+    "meta": {
+        "tile_types": "solid, chip, capacitor, trace — see tilemap.zig TileType enum",
+        "server_door": "1x2-tile Server Room door; top-left tile coords; base must rest on a platform"
+    },
     "name": "Circuit Board Alpha",
     "description": "The first level - navigate the motherboard and squash the bugs!",
     "width": 100,
@@ -51,7 +55,7 @@
         { "x": 44, "y": 17, "facing": "right" },
         { "x": 46, "y": 34, "facing": "left" },
 
-        { "x": 56, "y": 31, "facing": "left" },
+        { "x": 53, "y": 31, "facing": "left" },
         { "x": 67, "y": 27, "facing": "right" },
         { "x": 79, "y": 23, "facing": "left" },
         { "x": 88, "y": 19, "facing": "right" },

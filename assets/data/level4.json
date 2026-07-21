@@ -2,7 +2,8 @@
     "meta": {
         "tile_types": "solid, chip, capacitor, trace — see tilemap.zig TileType enum",
         "ai_types": "walker (default), jumper (intermittent jumping)",
-        "moving_platforms": "axis horizontal|vertical, distance in tiles, speed in tiles/sec, phase 0..1"
+        "moving_platforms": "axis horizontal|vertical, distance in tiles, speed in tiles/sec, phase 0..1",
+        "server_door": "1x2-tile Server Room door; top-left tile coords; base must rest on a platform"
     },
     "name": "Silicon Ascent",
     "description": "Level 4 - Climb the heatsink tower. Ride the buses up to the summit terminal.",
@@ -10,6 +11,7 @@
     "height": 150,
     "spawn": { "x": 5, "y": 148 },
     "terminal": { "x": 30, "y": 4 },
+    "server_door": { "x": 17, "y": 64 },
     "music": "transmission",
     "ground": {
         "y": 148,

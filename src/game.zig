@@ -15,6 +15,7 @@ const SparkManager = @import("hazards.zig").SparkManager;
 const MovingPlatformManager = @import("platform.zig").MovingPlatformManager;
 const audio = @import("audio.zig");
 const touch = @import("touch.zig");
+const serverroom = @import("serverroom.zig");
 
 // Web only: the custom shell's "Click to Start" button sets window.Module.pmStarted
 // (see web/shell.html). raylib only sees input that lands on the <canvas>, so a
@@ -36,6 +37,7 @@ pub const GameState = enum {
     game_over,
     victory,
     credits,
+    server_room,
 };
 
 pub const Camera = struct {
@@ -182,6 +184,9 @@ pub const Game = struct {
     /// Top-left tile coords of the Server Room door, or null if this level has
     /// none. When null the level auto-optimizes at load so it stays completable.
     server_door_pos: ?struct { x: i32, y: i32 },
+    /// The active Server Room scene, or null when the player is not inside one.
+    /// The level world freezes (its updatePlaying stops running) while set.
+    server_room: ?serverroom.ServerRoom,
     player_texture: ?rl.Texture2D,
     opening_texture: ?rl.Texture2D,
     game_complete: bool,
@@ -233,6 +238,7 @@ pub const Game = struct {
             .all_bugs_defeated = false,
             .terminal_pos = null,
             .server_door_pos = null,
+            .server_room = null,
             .player_texture = player_texture,
             .game_complete = false,
             .has_gamepad = false,
@@ -286,6 +292,20 @@ pub const Game = struct {
         return wo.x;
     }
 
+    /// Looping background track for a given level index.
+    fn levelMusicPath(level: u8) [:0]const u8 {
+        return switch (level) {
+            0 => "assets/music/lost_in_hyperspace.mp3",
+            1 => "assets/music/danger_streets.mp3",
+            2 => "assets/music/lone_fighter.mp3",
+            3 => "assets/music/transmission.mp3",
+            else => "assets/music/lost_in_hyperspace.mp3",
+        };
+    }
+
+    /// Track that plays inside the Server Room.
+    const server_room_music = "assets/music/bit_space.mp3";
+
     pub fn loadLevel(self: *Self, level: u8) void {
         self.current_level = level;
 
@@ -313,6 +333,7 @@ pub const Game = struct {
 
         // Reset Server Room door (set from level data below when present)
         self.server_door_pos = null;
+        self.server_room = null;
 
         // Player spawn defaults (overridden by JSON data when available)
         var spawn_x: i32 = config.SPAWN_TILE_X;
@@ -383,13 +404,7 @@ pub const Game = struct {
         // Switch background music based on level (only if not in opening state)
         if (self.state != .opening) {
             if (self.music) |*music| {
-                switch (level) {
-                    0 => music.switchTrack("assets/music/lost_in_hyperspace.mp3"),
-                    1 => music.switchTrack("assets/music/danger_streets.mp3"),
-                    2 => music.switchTrack("assets/music/lone_fighter.mp3"),
-                    3 => music.switchTrack("assets/music/transmission.mp3"),
-                    else => music.switchTrack("assets/music/lost_in_hyperspace.mp3"),
-                }
+                music.switchTrack(levelMusicPath(level));
             }
         }
 
@@ -569,6 +584,31 @@ pub const Game = struct {
             .game_over => self.updateGameOver(input),
             .victory => self.updateVictory(input),
             .credits => self.updateCredits(dt, input),
+            .server_room => self.updateServerRoom(dt, input),
+        }
+    }
+
+    fn updateServerRoom(self: *Self, dt: f32, input: controls.FrameInput) void {
+        // The level world is frozen while in the room — only the room updates.
+        // Pause is intentionally inert here: the scene is seconds long and
+        // resuming from a pause would eject the player back into .playing.
+        if (self.server_room) |*room| {
+            switch (room.update(dt, input)) {
+                .script_finished => {
+                    self.tilemap.system_optimized = true;
+                    self.player.score += config.OPTIMIZE_BONUS;
+                },
+                .exit_requested => {
+                    self.server_room = null;
+                    self.state = .playing;
+                    // Restore this level's background track.
+                    if (self.music) |*music| music.switchTrack(levelMusicPath(self.current_level));
+                },
+                .none => {},
+            }
+        } else {
+            // Defensive: no active room — fall back to normal play.
+            self.state = .playing;
         }
     }
 
@@ -641,13 +681,16 @@ pub const Game = struct {
             self.all_bugs_defeated = true;
         }
 
-        // Server Room door: entering runs the optimizing script. The full room
-        // scene arrives next; for now, stepping into the door and pressing submit
-        // optimizes the system directly.
+        // Server Room door: stepping into it and pressing submit switches to the
+        // room scene. The player's world position, camera, bugs, sparks, and
+        // platforms are untouched — the world freezes and resumes intact on exit.
+        // (playerAtServerDoor already returns false once optimized, so the door
+        // is a one-shot per level.)
         if (self.playerAtServerDoor() and input.submit_pressed) {
-            // TODO(Phase 3): switch to the Server Room scene instead of
-            // optimizing the system immediately.
-            self.tilemap.system_optimized = true;
+            self.server_room = serverroom.ServerRoom.enter(self.current_level);
+            self.state = .server_room;
+            // Swap the level track for the Server Room theme.
+            if (self.music) |*music| music.switchTrack(server_room_music);
         }
 
         // Check for terminal interaction to submit PR and win
@@ -780,6 +823,15 @@ pub const Game = struct {
     pub fn render(self: *Self) void {
         if (self.state == .credits) {
             self.renderCredits();
+            return;
+        }
+
+        if (self.state == .server_room) {
+            if (self.server_room) |*room| {
+                room.render(self.player_texture, self.tilemap.background_time, self.has_gamepad);
+            }
+            // Keep web touch buttons usable inside the room.
+            touch.render(self.state);
             return;
         }
 

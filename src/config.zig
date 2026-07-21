@@ -96,3 +96,8 @@ pub const SFX_VOLUME: f32 = 0.7;
 
 // Credits screen
 pub const CREDITS_SCROLL_SPEED: f32 = 20.0; // pixels/second — slow, chill, reflective pace
+
+// Server Room scene
+pub const ROOM_WALK_SPEED: f32 = 160.0; // pixels/second — PM's stroll inside the room
+pub const SCRIPT_LINE_INTERVAL: f32 = 0.45; // seconds between optimize.sh output lines
+pub const OPTIMIZE_BONUS: i32 = 500; // score awarded for running the optimizing script

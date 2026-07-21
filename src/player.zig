@@ -6,13 +6,13 @@ const config = @import("config.zig");
 const controls = @import("controls.zig");
 const Tilemap = @import("tilemap.zig").Tilemap;
 
-const FRAME_W: f32 = 83.0; // 500px sheet / 6 columns
-const FRAME_H: f32 = 100.0; // content height per frame row
+const FRAME_W: f32 = 166.0; // 1000px sheet / 6 columns
+const FRAME_H: f32 = 200.0; // content height per frame row
 
 // Per-row Y origins in the sprite sheet.
 // The sheet has text labels ("FACING RIGHT/LEFT") between rows 0 and 1,
 // so we use explicit offsets to skip that band cleanly.
-const ROW_Y = [4]f32{ 15.0, 143.0, 260.0, 383.0 };
+const ROW_Y = [4]f32{ 30.0, 286.0, 520.0, 766.0 };
 
 fn getSpriteRect(state: PlayerState, anim_frame: u8) rl.Rectangle {
     const col: f32 = @floatFromInt(switch (state) {

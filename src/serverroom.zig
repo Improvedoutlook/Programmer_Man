@@ -27,10 +27,10 @@ const PM_W: f32 = PM_H * 0.83; // keep the 83:100 sheet-frame aspect
 // Frames in the shared sprite sheet (see player.zig). Idle is row 0, column 0;
 // the walk cycle is the side-profile row 3, columns 2..5 — the same arm-swinging
 // run the player uses in the level.
-const SPRITE_FRAME_W: f32 = 83.0;
-const SPRITE_FRAME_H: f32 = 100.0;
-const SPRITE_IDLE_Y: f32 = 15.0;
-const SPRITE_RUN_Y: f32 = 383.0;
+const SPRITE_FRAME_W: f32 = 166.0;
+const SPRITE_FRAME_H: f32 = 200.0;
+const SPRITE_IDLE_Y: f32 = 30.0;
+const SPRITE_RUN_Y: f32 = 766.0;
 const RUN_FRAME_DURATION: f32 = 0.15; // seconds per walk frame (matches player.zig)
 
 /// Terminal-green, matching the HUD / credits body text.

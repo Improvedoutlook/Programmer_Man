@@ -315,24 +315,31 @@ pub const ServerRoom = struct {
 
     fn renderTerminal(self: *const Self, pal: Palette, time: f32) void {
         // Desk + monitor at the right side of the room.
-        const desk_x: i32 = 540;
-        const desk_w: i32 = 230;
+        const desk_x: i32 = 520;
+        const desk_w: i32 = 250;
         rl.drawRectangle(desk_x, 470, desk_w, 30, rl.Color{ .r = 30, .g = 34, .b = 40, .a = 255 });
 
-        const mon_x: i32 = 548;
+        const mon_x: i32 = 528;
         const mon_y: i32 = 250;
-        const mon_w: i32 = 214;
+        const mon_w: i32 = 234;
         const mon_h: i32 = 210;
         rl.drawRectangle(mon_x - 4, mon_y - 4, mon_w + 8, mon_h + 8, rl.Color{ .r = 20, .g = 24, .b = 30, .a = 255 });
         rl.drawRectangle(mon_x, mon_y, mon_w, mon_h, rl.Color{ .r = 8, .g = 12, .b = 10, .a = 255 });
         rl.drawRectangleLines(mon_x, mon_y, mon_w, mon_h, rl.Color{ .r = pal.accent.r, .g = pal.accent.g, .b = pal.accent.b, .a = 90 });
 
-        // Scrolling script output.
-        const fs: i32 = 11;
+        // Scrolling script output. raylib does not wrap, so pick the largest font
+        // size at which even the widest line stays inside the bezel — that keeps
+        // the longest line ("...DEGRADED") on screen no matter how the script text
+        // is edited later.
+        const inner_w = mon_w - 20; // 8px left pad + a right margin off the bezel
+        var fs: i32 = 11;
+        while (fs > 7 and widestScriptLine(fs) > inner_w) : (fs -= 1) {}
+        const line_h = fs + 5;
+
         var ty: i32 = mon_y + 8;
         for (script_lines[0..self.lines_shown]) |line| {
             rl.drawText(line, mon_x + 8, ty, fs, term_green);
-            ty += 16;
+            ty += line_h;
         }
 
         // Blinking cursor while the script is running.
@@ -388,6 +395,16 @@ pub const ServerRoom = struct {
         }
     }
 };
+
+/// Width of the widest script line at `fs`, used to size the terminal text.
+fn widestScriptLine(fs: i32) i32 {
+    var widest: i32 = 0;
+    for (script_lines) |line| {
+        const w = rl.measureText(line, fs);
+        if (w > widest) widest = w;
+    }
+    return widest;
+}
 
 /// A local spinning-fan draw (variant 1 decor), modeled on Tilemap.drawCoolingFan.
 fn drawFan(cx: i32, cy: i32, radius: i32, time: f32, accent: rl.Color) void {

@@ -605,6 +605,41 @@
           false
         );
 
+        // ----- Dev-server shutdown --------------------------------------------
+        // `zig build run-web` serves this page through emrun, whose Python web
+        // server is supposed to quit when the browser closes. On Windows it
+        // can't: emrun launches the browser via `start`, that helper returns
+        // immediately, and emrun then behaves as if --serve_after_close was
+        // passed — so the server (and the zig build waiting on it) keeps running
+        // after the tab is gone, as a mystery process in Task Manager.
+        //
+        // emrun does shut down when the page POSTs "^exit^<code>" to stdio.html,
+        // so send that as the page goes away. sendBeacon is the reliable way to
+        // get a request out during unload; the sync XHR is the fallback for
+        // browsers that lack it. "pagehide" fires on tab/window close where
+        // "unload" is increasingly ignored.
+        //
+        // Guarded to localhost so a deployed build (GitHub Pages, itch, …) never
+        // posts an exit message to a server that isn't emrun.
+        if (["localhost", "127.0.0.1", "[::1]", "::1"].indexOf(location.hostname) !== -1) {
+          var devServerNotified = false;
+          var notifyDevServerExit = function () {
+            if (devServerNotified) return;
+            devServerNotified = true;
+            var msg = "^exit^0";
+            try {
+              if (navigator.sendBeacon && navigator.sendBeacon("stdio.html", msg)) return;
+            } catch (e) {}
+            try {
+              var http = new XMLHttpRequest();
+              http.open("POST", "stdio.html", false); // sync: must land before teardown
+              http.send(msg);
+            } catch (e) {}
+          };
+          window.addEventListener("pagehide", notifyDevServerExit);
+          window.addEventListener("beforeunload", notifyDevServerExit);
+        }
+
         // ----- Emscripten Module wiring ---------------------------------------
         var Module = {
           canvas: canvas,
@@ -663,3 +698,4 @@
     {{{ SCRIPT }}}
   </body>
 </html>
+

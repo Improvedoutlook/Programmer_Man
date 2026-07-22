@@ -22,11 +22,9 @@ pub fn main() !void {
 
     // Initialize raylib window
     rl.initWindow(config.INITIAL_WINDOW_WIDTH, config.INITIAL_WINDOW_HEIGHT, "Programmer_Man");
-    defer rl.closeWindow();
 
     // Initialize audio device
     rl.initAudioDevice();
-    defer rl.closeAudioDevice();
 
     rl.setTargetFPS(60);
     controls.init();
@@ -37,16 +35,18 @@ pub fn main() !void {
     // any window size with letterboxing.
     const is_web = builtin.target.os.tag == .emscripten;
 
+    // NOTE: no `defer` teardown here on purpose — shutdown is explicit at the
+    // bottom of this function so that "window closed" and "process gone" are the
+    // same event (see the SHUTDOWN block). The only way out of main before that
+    // point is an init failure, and the process exits on that path anyway.
     const render_target = if (!is_web)
         try rl.loadRenderTexture(config.GAME_WIDTH, config.GAME_HEIGHT)
     else
         undefined;
-    defer if (!is_web) rl.unloadRenderTexture(render_target);
     if (!is_web) rl.setTextureFilter(render_target.texture, .point);
 
     // Initialize game state
     var game = Game.init();
-    defer game.deinit();
 
     // Initialize background effects
     var background = Background.init();
@@ -104,12 +104,65 @@ pub fn main() !void {
         }
     }
 
-    // Ensure clean exit - explicitly flush any pending operations.
+    // === SHUTDOWN ===
+    // The window is gone (X button, Alt+F4, or the exit key). From here the only
+    // acceptable outcome is a dead process: closing the window must be equivalent
+    // to killing the game, with no windowless programmer_man.exe left behind.
+    //
+    // Graceful teardown alone doesn't guarantee that. raylib's shutdown path can
+    // block indefinitely on Windows — miniaudio's WASAPI device uninit inside
+    // closeAudioDevice() is the usual suspect, and unloading five streaming
+    // rl.Music handles first gives it plenty of chances. So we arm a watchdog
+    // thread FIRST, then tear down: whichever finishes first ends the process.
+    //
     // Note (web): under -sASYNCIFY the browser owns the event loop and
-    // windowShouldClose() never returns true, so this point is never reached on
-    // emscripten and the deinit/closeWindow defers above do not run. That is
-    // cosmetic only (the tab just closes) — do NOT put gameplay-critical logic
-    // after the loop, or it will silently never execute on the web build.
+    // windowShouldClose() never returns true, so nothing below runs on
+    // emscripten — closing the tab is what reclaims everything there. Do NOT put
+    // gameplay-critical logic after the loop, or it silently never executes on
+    // the web build.
+    if (!is_web) {
+        if (std.Thread.spawn(.{}, shutdownWatchdog, .{})) |watchdog| {
+            watchdog.detach();
+        } else |_| {
+            // Couldn't spawn the watchdog — teardown below still runs, it just
+            // has no backstop. Not worth aborting shutdown over.
+        }
+    }
+
+    game.deinit();
+    if (!is_web) rl.unloadRenderTexture(render_target);
+    rl.closeAudioDevice();
+    rl.closeWindow();
+
+    hardExit();
+}
+
+/// How long graceful teardown gets after the window closes before the process is
+/// terminated outright. Long enough for a healthy shutdown (which takes single
+/// -digit milliseconds), short enough that a wedged one is never a mystery
+/// process in Task Manager.
+const SHUTDOWN_GRACE_MS: u64 = 2000;
+
+/// Backstop for a teardown that never returns. Runs detached, so if the main
+/// thread is still inside raylib when the grace period expires, this kills the
+/// process out from under it.
+fn shutdownWatchdog() void {
+    std.time.sleep(SHUTDOWN_GRACE_MS * std.time.ns_per_ms);
+    hardExit();
+}
+
+/// End the process immediately, running no further teardown.
+///
+/// On Windows this is TerminateProcess rather than ExitProcess: ExitProcess
+/// still runs DLL detach handlers and can itself block on the very audio/GPU
+/// driver threads we're trying to escape. Everything this process owns —
+/// memory, file handles, the audio device — is reclaimed by the OS regardless.
+fn hardExit() noreturn {
+    if (builtin.target.os.tag == .windows) {
+        const win = std.os.windows;
+        _ = win.kernel32.TerminateProcess(win.kernel32.GetCurrentProcess(), 0);
+    }
+    std.process.exit(0);
 }
 
 /// Calculates the scale factor to fit the game into the window while maintaining aspect ratio

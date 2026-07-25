@@ -212,9 +212,38 @@ cd C:\Users\HP\emsdk
 play in the browser with one script:
 
 ```powershell
-.\web.ps1              # build + serve in the browser
+.\web.ps1              # build + serve in the browser   <- the everyday one
 .\web.ps1 -BuildOnly   # just produce zig-out\htmlout\ (no server)
+.\web.ps1 -Optimized   # slow build matching the live site (rarely needed)
 ```
+
+Neither of these deploys. Deploying happens on `git push` to `develop-main` —
+see [Deploying](#deploying-static-hosting). `web.ps1` only builds on your PC.
+
+**Why a web build is slower than `.\dev.ps1`.** Compiling the game to
+WebAssembly ends with an Emscripten step that optimizes the `.wasm`, and how
+hard it optimizes is a dial from `-O0` (don't bother, finish fast) to `-O3`
+(grind, produce the best code). That one step is nearly the entire wall time —
+about 10.5 of 13 seconds — and the Zig build system can't cache it, so it re-runs
+even when nothing changed. Zig's own compilation of your game code *is* cached
+and takes milliseconds.
+
+So `web.ps1` turns the dial down to `-O1` (via `-Dweb-fast=true`):
+
+| | Emscripten step | rebuild after an edit | no-change rebuild | `.wasm` (gzipped) |
+|---|---|---|---|---|
+| default (`-O1`) | 2.5s | ~8.5s | ~2.4s | 711 KB |
+| `-Optimized` (`-O3`) | 13.0s | ~19s | ~16s | 287 KB |
+
+The bigger `-O1` file sounds bad but is ~1.5% of page weight — `index.data` is
+30 MB of music and sprites, which dwarfs it.
+
+**The live site is always `-O3`.** `-Dweb-fast` defaults to `false` in
+`build.zig`, and `.github/workflows/deploy-pages.yml` never passes it, so the
+deployed build is fully optimized no matter what you run locally. There is
+nothing to remember before pushing. `-Optimized` exists only for when you want
+to try that exact build on your own machine — checking frame rate, or chasing a
+bug that shows up on the live site but not locally.
 
 Output lands in `zig-out\htmlout\` (`index.html`, `.js`, `.wasm`, `.data`). The
 script serves it over HTTP via `emrun`; never open it via `file://` (the browser

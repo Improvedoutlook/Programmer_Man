@@ -89,6 +89,29 @@ pub fn build(b: *std.Build) void {
         // opening screen and easily exceeds the 4096-byte default.
         link.addArg("-sASYNCIFY_STACK_SIZE=65536");
 
+        // Fast-iteration link. raylib-zig's linkWithEmscripten() hardcodes -O3,
+        // and that single binaryen/wasm-opt pass (ASYNCIFY instrumentation over
+        // the whole raylib+game module) is ~10.5s of the ~13s emcc step — the
+        // entire reason web.ps1 feels slow next to dev.ps1. emcc takes the LAST
+        // -O flag on the command line, and everything here is appended after the
+        // dependency's args, so -O1 wins without patching the vendored helper.
+        //
+        // Measured on this project (no-change relink, emcc only):
+        //   -O3 13.0s / 700 KB wasm    -O2 9.7s / 717 KB
+        //   -O1  2.5s / 1441 KB        -O0 2.0s / 1461 KB
+        //
+        // MUST default to false: .github/workflows/deploy-pages.yml builds the
+        // GitHub Pages artifact with a bare `zig build -Dtarget=wasm32-emscripten
+        // -Doptimize=ReleaseFast` and never passes this option, so the default is
+        // what ships. web.ps1 opts IN for local iteration (and takes -Release to
+        // opt back out); flipping this default would silently deploy -O1.
+        const web_fast = b.option(
+            bool,
+            "web-fast",
+            "Web only: link with -O1 instead of -O3 for fast iteration (~5x faster link, ~2x larger wasm). Do not use for deploys.",
+        ) orelse false;
+        if (web_fast) link.addArg("-O1");
+
         // Custom presentation shell (Phase 5): centered responsive canvas, a
         // loading/progress bar wired to Module.setStatus/monitorRunDependencies,
         // a click-to-start gesture surface (also unlocks WebAudio, see Phase 4),

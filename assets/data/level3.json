@@ -1,7 +1,8 @@
 {
     "meta": {
         "tile_types": "solid, chip, capacitor, trace — see tilemap.zig TileType enum",
-        "ai_types": "walker (default), jumper (intermittent jumping)",
+        "kinds": "bug (red, 1 stomp, 100 pts) or beetle (green, 2 stomps, 200 pts)",
+        "ai_types": "walker (default), jumper (intermittent jumping; beetles jump higher), charger (telegraphs then dashes at the player)",
         "server_door": "1x2-tile Server Room door; top-left tile coords; base must rest on a platform"
     },
     "name": "Lone Fighter",
@@ -87,6 +88,12 @@
         { "x": 103, "y": 18, "facing": "left",  "speed": 2.0 },
 
         { "x": 109, "y": 14, "facing": "right", "speed": 2.0, "ai": "jumper" },
-        { "x": 115, "y": 10, "facing": "left",  "speed": 2.5, "ai": "jumper" }
+        { "x": 115, "y": 10, "facing": "left",  "speed": 2.5, "ai": "jumper" },
+
+        { "x": 20,  "y": 34, "facing": "left",  "kind": "beetle", "ai": "charger" },
+        { "x": 46,  "y": 26, "facing": "right", "kind": "beetle", "ai": "jumper"  },
+        { "x": 68,  "y": 34, "facing": "right", "kind": "beetle", "ai": "walker"  },
+        { "x": 86,  "y": 34, "facing": "left",  "kind": "beetle", "ai": "charger" },
+        { "x": 105, "y": 18, "facing": "left",  "kind": "beetle", "ai": "jumper"  }
     ]
 }

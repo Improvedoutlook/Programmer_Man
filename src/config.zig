@@ -38,13 +38,41 @@ pub const MAX_GAMEPADS: i32 = 4;
 pub const BUG_WIDTH: f32 = 16;
 pub const BUG_HEIGHT: f32 = 16;
 pub const BUG_WALK_SPEED: f32 = 80.0; // pixels/second (increased for visibility)
-pub const MAX_BUGS: usize = 32;
+pub const MAX_BUGS: usize = 48;
+
+// Beetle (green armored bug) — the tougher cousin of the red bug, inspired by
+// the green rhino beetle on the title art. It takes two stomps: the first only
+// cracks its shell, flipping it onto its back before it rights itself and comes
+// back faster and angrier.
+pub const BEETLE_WIDTH: f32 = 20;
+pub const BEETLE_HEIGHT: f32 = 18;
+pub const BEETLE_WALK_SPEED: f32 = 55.0; // slower patrol than a red bug — it's heavy
+pub const BEETLE_HITS_TO_KILL: i32 = 2;
+pub const BEETLE_CRACKED_SPEED_MULT: f32 = 1.7; // speed-up once the shell is cracked
+pub const BEETLE_STUN_DURATION: f32 = 0.7; // seconds on its back after the first stomp
+pub const BEETLE_HIT_FLASH_TIME: f32 = 0.25; // white flash on an armor hit
+
+// Beetles jump noticeably higher and more often than red-bug jumpers.
+pub const BEETLE_JUMP_VELOCITY: f32 = -400.0; // vs JUMPER_JUMP_VELOCITY (-250)
+pub const BEETLE_JUMP_INTERVAL_MIN: f32 = 0.8;
+pub const BEETLE_JUMP_INTERVAL_MAX: f32 = 2.0;
+
+// Charger AI — the beetle's third behaviour. It patrols slowly until the player
+// steps into its sight line on the same floor, rears up as a telegraph, then
+// dashes. Slamming into a wall or a ledge ends the dash early.
+pub const CHARGE_DETECT_RANGE: f32 = 176.0; // pixels ahead (11 tiles)
+pub const CHARGE_DETECT_VERTICAL: f32 = 20.0; // feet must be within this many px
+pub const CHARGE_TELEGRAPH_TIME: f32 = 0.45; // rear-up wind-up before the dash
+pub const CHARGE_SPEED_MULT: f32 = 3.0; // dash speed vs patrol speed
+pub const CHARGE_DURATION: f32 = 1.1; // max seconds of dashing
+pub const CHARGE_COOLDOWN: f32 = 1.3; // recovery before it can charge again
 
 // Hazard parameters
 pub const MAX_SPARKS: usize = 64; // Maximum number of falling sparks
 
 // Scoring
 pub const POINTS_PER_STOMP: i32 = 100;
+pub const POINTS_PER_BEETLE: i32 = 200; // awarded only on the killing blow
 pub const INITIAL_LIVES: i32 = 3;
 
 // Power stomp — reward for smashing a bug at high fall speed (a well-timed big
@@ -63,6 +91,9 @@ pub const BACKGROUND_COLOR = rl.Color{ .r = 20, .g = 30, .b = 40, .a = 255 }; //
 pub const PLATFORM_COLOR = rl.Color{ .r = 60, .g = 90, .b = 60, .a = 255 }; // PCB substrate green
 pub const PLAYER_COLOR = rl.Color{ .r = 100, .g = 180, .b = 255, .a = 255 }; // Bright blue (programmer)
 pub const BUG_COLOR = rl.Color{ .r = 200, .g = 80, .b = 80, .a = 255 }; // Red bug
+pub const BEETLE_COLOR = rl.Color{ .r = 60, .g = 170, .b = 75, .a = 255 }; // Green beetle carapace
+pub const BEETLE_SHELL_COLOR = rl.Color{ .r = 110, .g = 225, .b = 110, .a = 255 }; // Elytra highlight
+pub const BEETLE_CRACKED_COLOR = rl.Color{ .r = 150, .g = 190, .b = 70, .a = 255 }; // Damaged shell
 pub const TRACE_COLOR = rl.Color{ .r = 180, .g = 150, .b = 50, .a = 255 }; // Gold PCB traces
 pub const CHIP_COLOR = rl.Color{ .r = 40, .g = 40, .b = 45, .a = 255 }; // IC chip black
 pub const HUD_COLOR = rl.Color{ .r = 0, .g = 255, .b = 128, .a = 255 }; // Green terminal text

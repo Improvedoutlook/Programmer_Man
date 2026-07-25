@@ -17,10 +17,11 @@ Programmer_Man is a retro-style platformer where you play as a programmer naviga
 - **Classic platformer mechanics**: Run, jump, and stomp enemies
 - **Hardware-themed visuals**: PCB traces, chips, capacitors, and more
 - **Bug enemies**: Patrol-type enemies that can be defeated by jumping on them
+- **Green beetles**: A tougher, armored second species — two stomps to kill, and each one behaves differently (patrol, high jumper, or a charger that locks on and dashes at you)
 - **Power stomp**: Landing on a bug at high fall speed triggers a screen shake and double points; stomping two bugs at once doubles the bounce
 - **Server Room dual objective**: each level's background lights flicker chaotically until you find the level's door, enter the Server Room, and run the optimizing script — squashing all bugs *and* optimizing the system are both required before the PR terminal activates
 - **Moving platforms**: Horizontal and vertical platforms that carry the player
-- **Scoring system**: +100 points per bug stomped (2x on a power stomp), +500 for optimizing the system
+- **Scoring system**: +100 points per red bug stomped, +200 per green beetle destroyed (2x on a power stomp), +500 for optimizing the system
 - **Lives system**: 3 lives with respawn on death
 - **Opening screen**: Animated title screen with music before the first level
 - **End credits**: Scrolling credits roll with its own music after the final level
@@ -103,6 +104,32 @@ Notes:
 - Stomping two bugs at the same spot at once gives an extra bounce
 - Side or bottom collision with bugs = death
 - Brief invincibility after respawning
+
+### Enemy types
+
+| | Red bug | Green beetle |
+|---|---|---|
+| Stomps to kill | 1 | 2 |
+| Score | 100 | 200 (only on the killing blow) |
+| Speed | Fast patrol | Slow — until its shell cracks, then ~1.7x |
+| Count | Common | Rarer; 3–5 per level |
+
+The green beetle is the armored one from the title art. The first stomp only
+cracks its shell: it flips onto its back for about ¾ of a second — harmless and
+un-stompable while it's down — then rights itself, visibly cracked, and comes
+back faster. A **power stomp shatters the armor in one blow**, so a well-timed
+drop from height is worth learning. Every beetle is authored with one of three
+behaviours, so no two play the same:
+
+- **`walker`** — patrols its platform, slower and heavier than a red bug.
+- **`jumper`** — hops far higher than a red-bug jumper (≈4 tiles vs ≈1.5), and
+  more often, so it clears your head instead of walking under your jump.
+- **`charger`** — the aggressive one. It patrols slowly until you step into its
+  sight line on the same platform (~11 tiles ahead), turns to face you if you
+  sneak up behind it, then **rears up in place with its eyes glowing red** for
+  0.45s before dashing at 3x speed. The wind-up is your window to jump it or get
+  clear; the dash ends when it hits a wall or a ledge, leaving it winded and
+  wide open for a stomp.
 
 ### Server Room
 - Every level starts "bugged": background LEDs, board lights, and data buses flicker randomly
@@ -256,9 +283,10 @@ files to any static host:
 ### What's Implemented
 
 - ✅ Player physics & movement (run, jump, coyote time, jump buffering, variable jump)
-- ✅ Enemy AI (walker patrols and jumper behavior)
+- ✅ Enemy AI (walker patrols, jumper behavior, and charger lock-on/dash)
+- ✅ Two enemy species: red bugs (1 stomp) and armored green beetles (2 stomps)
 - ✅ Tile-based AABB collision and collision resolution
-- ✅ Stomp mechanic, bounce, and scoring (+100 per stomp)
+- ✅ Stomp mechanic, bounce, and scoring (+100 per bug, +200 per beetle)
 - ✅ Lives, health, respawn, and invincibility frames
 - ✅ HUD (score, lives, health/status, game over UI)
 - ✅ Level loading from JSON with a fallback builder (4 levels)

@@ -1,6 +1,8 @@
 {
     "meta": {
         "tile_types": "solid, chip, capacitor, trace — see tilemap.zig TileType enum",
+        "kinds": "bug (red, 1 stomp, 100 pts) or beetle (green, 2 stomps, 200 pts)",
+        "ai_types": "walker (default), jumper (beetles jump higher), charger (telegraphs then dashes at the player)",
         "server_door": "1x2-tile Server Room door; top-left tile coords; base must rest on a platform"
     },
     "name": "Danger Streets",
@@ -67,6 +69,11 @@
         { "x": 82,  "y": 26, "facing": "left",  "speed": 1.5 },
         { "x": 93,  "y": 30, "facing": "right", "speed": 1.0 },
         { "x": 99,  "y": 26, "facing": "left",  "speed": 2.0 },
-        { "x": 105, "y": 22, "facing": "right", "speed": 1.5 }
+        { "x": 105, "y": 22, "facing": "right", "speed": 1.5 },
+
+        { "x": 28, "y": 34, "facing": "left",  "kind": "beetle", "ai": "charger" },
+        { "x": 21, "y": 24, "facing": "right", "kind": "beetle", "ai": "jumper"  },
+        { "x": 62, "y": 18, "facing": "left",  "kind": "beetle", "ai": "charger" },
+        { "x": 78, "y": 30, "facing": "left",  "kind": "beetle", "ai": "walker"  }
     ]
 }

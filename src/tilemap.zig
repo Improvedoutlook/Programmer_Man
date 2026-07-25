@@ -757,6 +757,8 @@ const JsonBug = struct {
     facing: []const u8,
     speed: f32 = 1.0,
     ai: []const u8 = "walker",
+    // "bug" (red, one stomp) or "beetle" (green, armored, two stomps).
+    kind: []const u8 = "bug",
 };
 const JsonMovingPlatform = struct {
     x: i32,
@@ -786,11 +788,20 @@ const JsonLevelSchema = struct {
     server_door: ?JsonCoord = null,
 };
 
-pub const MAX_SPAWN_ENTRIES: usize = 32;
+pub const MAX_SPAWN_ENTRIES: usize = 48;
 
 pub const AiType = enum {
     walker,
     jumper,
+    /// Patrols slowly, then telegraphs and dashes when the player walks into
+    /// its sight line on the same floor.
+    charger,
+};
+
+/// Which enemy species to spawn. Beetles are the green, armored variant.
+pub const BugKind = enum {
+    bug,
+    beetle,
 };
 
 pub const BugSpawn = struct {
@@ -799,6 +810,7 @@ pub const BugSpawn = struct {
     facing_right: bool,
     speed: f32,
     ai: AiType = .walker,
+    kind: BugKind = .bug,
 };
 
 pub const SparkSpawn = struct {
@@ -834,6 +846,12 @@ pub const LevelData = struct {
     server_door_y: i32,
     has_server_door: bool,
 };
+
+fn jsonAiType(name: []const u8) AiType {
+    if (std.mem.eql(u8, name, "jumper")) return .jumper;
+    if (std.mem.eql(u8, name, "charger")) return .charger;
+    return .walker;
+}
 
 fn jsonTileType(name: []const u8) TileType {
     if (std.mem.eql(u8, name, "solid")) return .solid;
@@ -925,7 +943,8 @@ pub fn loadLevelFromJson(tilemap: *Tilemap, path: []const u8) !LevelData {
             .tile_y = bug.y,
             .facing_right = std.mem.eql(u8, bug.facing, "right"),
             .speed = bug.speed,
-            .ai = if (std.mem.eql(u8, bug.ai, "jumper")) .jumper else .walker,
+            .ai = jsonAiType(bug.ai),
+            .kind = if (std.mem.eql(u8, bug.kind, "beetle")) .beetle else .bug,
         };
         result.bug_count += 1;
     }

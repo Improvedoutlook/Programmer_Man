@@ -440,8 +440,12 @@ pub const Game = struct {
         // Spawn bugs from loaded data
         for (0..level_data.bug_count) |i| {
             const bug = level_data.bug_spawns[i];
-            const actual_speed = config.BUG_WALK_SPEED * bug.speed;
-            self.bugs.spawn(bug.tile_x, bug.tile_y, bug.facing_right, actual_speed, bug.ai);
+            const base_speed: f32 = switch (bug.kind) {
+                .bug => config.BUG_WALK_SPEED,
+                .beetle => config.BEETLE_WALK_SPEED,
+            };
+            const actual_speed = base_speed * bug.speed;
+            self.bugs.spawn(bug.tile_x, bug.tile_y, bug.facing_right, actual_speed, bug.ai, bug.kind);
         }
 
         // Register spark spawn points from loaded data
@@ -472,22 +476,28 @@ pub const Game = struct {
     fn spawnBugsLevel1(self: *Self) void {
         // Spawn bugs at strategic locations
         // Bug on ground floor, left side
-        self.bugs.spawn(8, 34, true, config.BUG_WALK_SPEED, .walker);
+        self.bugs.spawn(8, 34, true, config.BUG_WALK_SPEED, .walker, .bug);
 
         // Bug on ground floor, middle
-        self.bugs.spawn(22, 34, false, config.BUG_WALK_SPEED, .walker);
+        self.bugs.spawn(22, 34, false, config.BUG_WALK_SPEED, .walker, .bug);
 
         // Bug on Platform 2
-        self.bugs.spawn(20, 27, true, config.BUG_WALK_SPEED, .walker);
+        self.bugs.spawn(20, 27, true, config.BUG_WALK_SPEED, .walker, .bug);
 
         // Bug on Platform 3
-        self.bugs.spawn(34, 23, false, config.BUG_WALK_SPEED, .walker);
+        self.bugs.spawn(34, 23, false, config.BUG_WALK_SPEED, .walker, .bug);
 
         // Bug on high platform
-        self.bugs.spawn(44, 17, true, config.BUG_WALK_SPEED, .walker);
+        self.bugs.spawn(44, 17, true, config.BUG_WALK_SPEED, .walker, .bug);
 
         // NEW: Bug on bottom far-right platform
-        self.bugs.spawn(46, 34, false, config.BUG_WALK_SPEED, .walker);
+        self.bugs.spawn(46, 34, false, config.BUG_WALK_SPEED, .walker, .bug);
+
+        // Green beetles: one of each behaviour, so the fallback level still
+        // teaches all three the way the JSON level does.
+        self.bugs.spawn(36, 34, false, config.BEETLE_WALK_SPEED, .charger, .beetle);
+        self.bugs.spawn(10, 29, true, config.BEETLE_WALK_SPEED, .jumper, .beetle);
+        self.bugs.spawn(78, 34, false, config.BEETLE_WALK_SPEED, .walker, .beetle);
     }
 
     /// Fallback: register hardcoded spark spawn points for Level 1.
@@ -638,7 +648,8 @@ pub const Game = struct {
         self.moving_platforms.resolvePlayer(&self.player);
 
         // Update enemies
-        self.bugs.update(dt, &self.tilemap);
+        // Chargers need the player's position to decide when to lock on.
+        self.bugs.update(dt, &self.tilemap, self.player.x, self.player.y);
 
         // Update sparks
         self.sparks.update(dt);

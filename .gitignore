@@ -5,3 +5,6 @@
 zig-cache*/
 .zig-cache*/
 zig-out/
+
+# Python bytecode from the asset tools in tools/
+__pycache__/

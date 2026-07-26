@@ -35,9 +35,18 @@ Programmer_Man is a retro-style platformer where you play as a programmer naviga
 | Move Left | `A` or `←` (Left Arrow) | D-pad / left stick | ◀ button (bottom-left) |
 | Move Right | `D` or `→` (Right Arrow) | D-pad / left stick | ▶ button (bottom-left) |
 | Jump | `Space`, `W`, or `↑` (Up Arrow) | `A` / Cross | JUMP button (bottom-right) |
+| Run | Hold `Shift` + a direction | Hold `X` / Square + a direction | Swipe further out from where your thumb landed |
 | Confirm / Submit PR | `Enter` or `E` | `X` / Square | Jump onto the terminal, or tap |
 | Pause | `P` or `Escape` | Start | ❚❚ button (top-right) |
 | Restart (after game over) | `R` | `X` / Square | Tap anywhere / RESTART button |
+
+**Running.** Holding the run modifier with a direction moves Programmer_Man at
+1.65x his walking pace, switches him to a full-stride sprint animation, and — if
+you press jump while he is already running — adds a little extra lift, enough to
+clear a gap or a ledge a walking jump can't. Let go of the direction and he
+drops straight back to the subdued walk cycle. Every jump in the existing levels
+is tuned around the walk, so running only ever opens up new options; it never
+takes any away.
 
 Gamepads work natively **and** in the browser (Web Gamepad API). On a touch
 device the on-screen controls appear automatically the first time you touch the

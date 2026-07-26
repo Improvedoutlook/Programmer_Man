@@ -11,19 +11,29 @@ const FRAME_H: f32 = 200.0; // content height per frame row
 
 // Per-row Y origins in the sprite sheet.
 // The sheet has text labels ("FACING RIGHT/LEFT") between rows 0 and 1,
-// so we use explicit offsets to skip that band cleanly.
-const ROW_Y = [4]f32{ 30.0, 286.0, 520.0, 766.0 };
+// so we use explicit offsets to skip that band cleanly. Row 4 is the walk
+// cycle: the same four side-profile poses as row 3 with the arm swing and
+// stride pulled in, generated from row 3 by tools/make_walk_row.py.
+const ROW_Y = [5]f32{ 30.0, 286.0, 520.0, 766.0, 1000.0 };
+const ROW_RUN: u8 = 3;
+const ROW_WALK: u8 = 4;
 
-fn getSpriteRect(state: PlayerState, anim_frame: u8) rl.Rectangle {
+/// `running` picks between the two side-profile rows: the full sprint poses and
+/// the subdued walk poses. Both rows lay their cycle out in columns 2..5, so the
+/// column maths is shared.
+fn getSpriteRect(state: PlayerState, anim_frame: u8, running: bool) rl.Rectangle {
     const col: f32 = @floatFromInt(switch (state) {
-        .running => anim_frame + 2,
+        .walking, .running => anim_frame + 2,
         .jumping, .falling, .stomping => 4, // column 4 = mid-stride airborne pose
         else => anim_frame,
     });
     const row: u8 = switch (state) {
-        .idle => 0,
-        .running, .jumping, .falling, .stomping => 3, // all use side-profile row
-        .dead => 0,
+        .idle, .dead => 0,
+        .walking => ROW_WALK,
+        .running => ROW_RUN,
+        // Airborne keeps whichever pose the takeoff was made in, so a standing
+        // hop doesn't suddenly throw a sprinter's arm out.
+        .jumping, .falling, .stomping => if (running) ROW_RUN else ROW_WALK,
     };
     return rl.Rectangle{
         .x = col * FRAME_W,
@@ -35,6 +45,7 @@ fn getSpriteRect(state: PlayerState, anim_frame: u8) rl.Rectangle {
 
 pub const PlayerState = enum {
     idle,
+    walking,
     running,
     jumping,
     falling,
@@ -59,6 +70,8 @@ pub const Player = struct {
     jump_held: bool,
     coyote_timer: f32, // NEW: Allows jumping shortly after leaving platform
     jump_buffer_timer: f32, // NEW: Remembers jump press before landing
+    running: bool, // run modifier held *and* a direction pressed
+    jump_impulse: f32, // impulse the current jump left the ground with
 
     // Animation
     anim_frame: u8,
@@ -90,6 +103,8 @@ pub const Player = struct {
             .jump_held = false,
             .coyote_timer = 0,
             .jump_buffer_timer = 0,
+            .running = false,
+            .jump_impulse = config.PLAYER_JUMP_IMPULSE,
             .anim_frame = 0,
             .anim_timer = 0,
             .lives = config.INITIAL_LIVES,
@@ -111,6 +126,8 @@ pub const Player = struct {
         self.on_ground = false;
         self.coyote_timer = 0;
         self.jump_buffer_timer = 0;
+        self.running = false;
+        self.jump_impulse = config.PLAYER_JUMP_IMPULSE;
         self.health = 3;
         self.invincible_timer = 2.0; // Brief invincibility after respawn
     }
@@ -126,9 +143,17 @@ pub const Player = struct {
             self.facing_right = true;
         }
 
+        // The run modifier only counts while a direction is actually held, so
+        // holding it while standing still doesn't arm a taller jump. Once
+        // airborne the run latches until landing: letting go of the stick at the
+        // apex shouldn't snap the sprite out of its sprint pose mid-flight.
+        const wants_run = input.run_down and move_input != 0;
+        self.running = if (self.on_ground) wants_run else (self.running or wants_run);
+
         // Apply acceleration based on ground/air state
         const accel_factor = if (self.on_ground) 1.0 else config.PLAYER_AIR_CONTROL;
-        self.vx = move_input * config.PLAYER_RUN_SPEED * accel_factor;
+        const speed = if (self.running) config.PLAYER_RUN_SPEED else config.PLAYER_WALK_SPEED;
+        self.vx = move_input * speed * accel_factor;
 
         // Jump input - set buffer timer when jump is pressed
         if (input.jump_pressed) {
@@ -154,16 +179,21 @@ pub const Player = struct {
         // Handle jump with coyote time and input buffering
         const can_jump = self.on_ground or self.coyote_timer > 0;
         if (self.jump_buffer_timer > 0 and can_jump) {
-            self.vy = -config.PLAYER_JUMP_IMPULSE;
+            // Leaving the ground at a run carries a little extra lift.
+            self.jump_impulse = config.PLAYER_JUMP_IMPULSE *
+                (if (self.running) config.PLAYER_RUN_JUMP_MULTIPLIER else 1.0);
+            self.vy = -self.jump_impulse;
             self.on_ground = false;
             self.state = .jumping;
             self.jump_buffer_timer = 0; // Consume the buffered jump
             self.coyote_timer = 0; // Consume coyote time
         }
 
-        // Variable jump height - cut jump short if button released early
-        if (!self.jump_held and self.vy < -config.PLAYER_JUMP_IMPULSE * 0.5) {
-            self.vy = -config.PLAYER_JUMP_IMPULSE * 0.5;
+        // Variable jump height - cut jump short if button released early.
+        // Measured against the impulse this jump actually left with, so a run
+        // jump keeps the same half-height floor proportionally.
+        if (!self.jump_held and self.vy < -self.jump_impulse * 0.5) {
+            self.vy = -self.jump_impulse * 0.5;
         }
 
         // Apply gravity
@@ -283,7 +313,7 @@ pub const Player = struct {
             }
         } else {
             if (@abs(self.vx) > 10) {
-                self.state = .running;
+                self.state = if (self.running) .running else .walking;
             } else {
                 self.state = .idle;
             }
@@ -294,13 +324,15 @@ pub const Player = struct {
         self.anim_timer += dt;
 
         const frame_duration: f32 = switch (self.state) {
-            .running => 0.15,
+            .walking => config.PLAYER_WALK_FRAME_TIME,
+            .running => config.PLAYER_RUN_FRAME_TIME,
             else => 0.2,
         };
 
         // How many frames does this animation have?
         const frame_count: u32 = switch (self.state) {
-            .running => 4, // side-profile frames (cols 2-5, remapped in getSpriteRect)
+            // side-profile frames (cols 2-5, remapped in getSpriteRect)
+            .walking, .running => 4,
             else => 1, // idle/jump/fall: single static frame
         };
 
@@ -317,7 +349,10 @@ pub const Player = struct {
     }
 
     pub fn bounce(self: *Self) void {
-        // Called when stomping an enemy - gives a small bounce
+        // Called when stomping an enemy - gives a small bounce.
+        // The bounce is not a jump, so the variable-height cut above goes back to
+        // measuring against the base impulse (unchanged from before run existed).
+        self.jump_impulse = config.PLAYER_JUMP_IMPULSE;
         self.vy = -config.PLAYER_JUMP_IMPULSE * config.PLAYER_BOUNCE_FACTOR;
         self.on_ground = false;
         self.state = .stomping;
@@ -372,7 +407,7 @@ pub const Player = struct {
         }
 
         const rect = self.getRect();
-        var src = getSpriteRect(self.state, self.anim_frame);
+        var src = getSpriteRect(self.state, self.anim_frame, self.running);
 
         // Negative width flips the sprite horizontally — standard Raylib technique
         if (!self.facing_right) {

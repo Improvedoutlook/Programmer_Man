@@ -25,7 +25,7 @@ pub const TILES_Y: i32 = GAME_HEIGHT / TILE_SIZE; // 37 tiles (visible on screen
 // Player dimensions and physics
 pub const PLAYER_WIDTH: f32 = 24; // Was 14
 pub const PLAYER_HEIGHT: f32 = 36; // Was 16
-pub const PLAYER_RUN_SPEED: f32 = 200.0; // pixels/second
+pub const PLAYER_WALK_SPEED: f32 = 200.0; // pixels/second — default pace
 pub const PLAYER_GRAVITY: f32 = 1200.0; // pixels/second²
 pub const PLAYER_JUMP_IMPULSE: f32 = 450.0; // pixels/second
 pub const PLAYER_MAX_FALL_SPEED: f32 = 900.0; // pixels/second
@@ -33,6 +33,18 @@ pub const PLAYER_AIR_CONTROL: f32 = 0.6; // 60% of ground acceleration
 pub const PLAYER_BOUNCE_FACTOR: f32 = 0.6; // 60% of jump impulse on stomp
 pub const GAMEPAD_AXIS_DEADZONE: f32 = 0.25;
 pub const MAX_GAMEPADS: i32 = 4;
+
+// Run modifier — hold the run button (Shift / X / Square) with a direction.
+// Walk speed is deliberately the old PLAYER_RUN_SPEED value, so every jump the
+// existing levels were tuned around still clears exactly as it always did;
+// running is purely additive on top.
+pub const PLAYER_RUN_SPEED: f32 = 330.0; // pixels/second — 1.65x a walk
+// Taller jump when taking off at a run. Apex height goes as the square of the
+// impulse, so 1.12x of 450 lifts the apex from ~84px to ~106px — a touch over
+// one extra tile, enough to feel earned without trivialising a climb.
+pub const PLAYER_RUN_JUMP_MULTIPLIER: f32 = 1.12;
+pub const PLAYER_WALK_FRAME_TIME: f32 = 0.16; // seconds per walk-cycle frame
+pub const PLAYER_RUN_FRAME_TIME: f32 = 0.10; // faster legs to match the faster body
 
 // Enemy (Bug) parameters
 pub const BUG_WIDTH: f32 = 16;

@@ -3,9 +3,10 @@
 //! Instead of fixed on-screen buttons (which ate the bottom third of the
 //! screen), the whole play area is the controller:
 //!
-//!   * Tap anywhere      -> jump
-//!   * Hold & swipe left  -> run left  (for as long as the finger stays left)
-//!   * Hold & swipe right -> run right
+//!   * Tap anywhere       -> jump
+//!   * Hold & swipe left  -> walk left  (for as long as the finger stays left)
+//!   * Hold & swipe right -> walk right
+//!   * ...push the swipe further out -> run (the modifier the pad puts on X)
 //!
 //! Movement is a "relative joystick": each finger remembers where it first
 //! touched down, and the character runs in the direction the finger has since
@@ -42,6 +43,8 @@ const accent = rl.Color{ .r = 74, .g = 214, .b = 196, .a = 255 };
 // --- Tuning (all in the 800x600 framebuffer space) --------------------------
 const move_deadzone: f32 = 36; // horizontal travel before a finger becomes a "move"
 const move_hysteresis: f32 = 12; // |dx| under this (while moving) = standing still
+const run_threshold: f32 = 104; // push the thumb out this far to run instead of walk
+const run_release: f32 = 84; // ...and back inside this to drop to a walk (hysteresis)
 const tap_max_move: f32 = 24; // a tap must not drift more than this
 const tap_max_time: f64 = 0.30; // ...nor be held longer than this (seconds)
 const jump_hold_window: f32 = 0.35; // how long the jump flag stays latched after a tap
@@ -61,6 +64,7 @@ const Tracked = struct {
     last: Vec = .{ .x = 0, .y = 0 },
     start_time: f64 = 0,
     dir: i32 = 0, // -1 left, 0 none, +1 right (only meaningful for .move)
+    running: bool = false, // swiped past run_threshold (only meaningful for .move)
 };
 
 var tracked: [16]Tracked = [_]Tracked{.{}} ** 16;
@@ -70,6 +74,7 @@ var seen_touch: bool = false; // ever seen a finger? (controls UI visibility)
 var has_interacted: bool = false; // jumped or moved at least once (hides the hint)
 var left_held: bool = false;
 var right_held: bool = false;
+var run_held: bool = false;
 var jump_pressed: bool = false; // rising edge: a tap lifted this frame
 var jump_hold_timer: f32 = 0; // > 0 => report jump as held (full-height jumps)
 var pause_pressed: bool = false; // rising edge: a finger landed on the pause button
@@ -147,6 +152,7 @@ pub fn update() void {
     // quick, near-stationary pending release into a jump.
     left_held = false;
     right_held = false;
+    run_held = false;
     pause_active = false;
 
     for (&tracked, 0..) |*t, k| {
@@ -175,8 +181,17 @@ pub fn update() void {
         }
         if (t.kind == .move) {
             t.dir = if (dx <= -move_hysteresis) -1 else if (dx >= move_hysteresis) 1 else 0;
+            // Latch/unlatch the run at two different distances so a thumb resting
+            // near the boundary doesn't flicker between walking and running.
+            const reach = @abs(dx);
+            if (reach >= run_threshold) {
+                t.running = true;
+            } else if (reach <= run_release) {
+                t.running = false;
+            }
             if (t.dir < 0) left_held = true;
             if (t.dir > 0) right_held = true;
+            if (t.dir != 0 and t.running) run_held = true;
         }
         if (t.kind == .pause) pause_active = true;
     }
@@ -189,6 +204,11 @@ pub fn isLeftDown() bool {
 }
 pub fn isRightDown() bool {
     return is_web and right_held;
+}
+/// True while a moving finger has been dragged past `run_threshold` — the touch
+/// stand-in for holding the run button.
+pub fn isRunDown() bool {
+    return is_web and run_held;
 }
 /// Held while a tap-jump is still within its latch window, so the variable
 /// jump-height physics (player.zig) produce a full jump from a quick tap.
@@ -246,7 +266,7 @@ fn fillFor(held: bool) rl.Color {
 
 /// Faint one-time hint shown until the player first jumps or moves.
 fn drawHint() void {
-    const label = "Tap to Jump  -  Swipe to Move";
+    const label = "Tap to Jump  -  Swipe to Move  -  Swipe Further to Run";
     const fs = 20;
     const w = rl.measureText(label, fs);
     const x = @divTrunc(config.GAME_WIDTH, 2) - @divTrunc(w, 2);

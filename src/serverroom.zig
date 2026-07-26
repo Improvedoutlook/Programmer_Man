@@ -30,7 +30,9 @@ const PM_W: f32 = PM_H * 0.83; // keep the 83:100 sheet-frame aspect
 const SPRITE_FRAME_W: f32 = 166.0;
 const SPRITE_FRAME_H: f32 = 200.0;
 const SPRITE_IDLE_Y: f32 = 30.0;
-const SPRITE_RUN_Y: f32 = 766.0;
+// PM strolls in here (ROOM_WALK_SPEED), so he uses the subdued walk row rather
+// than the sprint row above it. See player.zig ROW_Y.
+const SPRITE_WALK_Y: f32 = 1000.0;
 const RUN_FRAME_DURATION: f32 = 0.15; // seconds per walk frame (matches player.zig)
 
 /// Terminal-green, matching the HUD / credits body text.
@@ -357,10 +359,10 @@ pub const ServerRoom = struct {
         };
 
         if (player_texture) |tex| {
-            // Walking → side-profile run frame (row 3, cols 2..5); at rest → idle.
+            // Walking → side-profile walk frame (row 4, cols 2..5); at rest → idle.
             var src = if (self.moving) rl.Rectangle{
                 .x = (@as(f32, @floatFromInt(self.anim_frame)) + 2.0) * SPRITE_FRAME_W,
-                .y = SPRITE_RUN_Y,
+                .y = SPRITE_WALK_Y,
                 .width = SPRITE_FRAME_W,
                 .height = SPRITE_FRAME_H,
             } else rl.Rectangle{

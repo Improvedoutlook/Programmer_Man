@@ -19,6 +19,7 @@ pub const Action = enum {
     move_left,
     move_right,
     jump,
+    run,
     submit,
     pause,
     restart,
@@ -28,6 +29,7 @@ pub const FrameInput = struct {
     move_x: f32,
     jump_pressed: bool,
     jump_down: bool,
+    run_down: bool,
     submit_pressed: bool,
     pause_pressed: bool,
     restart_pressed: bool,
@@ -43,6 +45,7 @@ const ButtonBinding = struct {
 const move_left_keys = [_]rl.KeyboardKey{ .a, .left };
 const move_right_keys = [_]rl.KeyboardKey{ .d, .right };
 const jump_keys = [_]rl.KeyboardKey{ .space, .w, .up };
+const run_keys = [_]rl.KeyboardKey{ .left_shift, .right_shift };
 const submit_keys = [_]rl.KeyboardKey{ .enter, .kp_enter, .e };
 const pause_keys = [_]rl.KeyboardKey{ .escape, .p };
 const restart_keys = [_]rl.KeyboardKey{.r};
@@ -50,6 +53,11 @@ const restart_keys = [_]rl.KeyboardKey{.r};
 const move_left_buttons = [_]rl.GamepadButton{.left_face_left};
 const move_right_buttons = [_]rl.GamepadButton{.left_face_right};
 const jump_buttons = [_]rl.GamepadButton{.right_face_down};
+// The run modifier shares the left face button (X / Square) with submit and
+// restart. They never compete: submit is only read while standing in the server
+// room door or on the terminal/level-complete screen, restart only on game over,
+// and both are edge-triggered — holding X to run fires neither repeatedly.
+const run_buttons = [_]rl.GamepadButton{.right_face_left};
 const submit_buttons = [_]rl.GamepadButton{.right_face_left};
 const pause_buttons = [_]rl.GamepadButton{.middle_right};
 const restart_buttons = [_]rl.GamepadButton{.right_face_left};
@@ -126,6 +134,7 @@ pub fn poll() FrameInput {
         .move_x = readMoveAxis(gamepad),
         .jump_pressed = isActionPressed(.jump, gamepad),
         .jump_down = isActionDown(.jump, gamepad),
+        .run_down = isActionDown(.run, gamepad),
         .submit_pressed = isActionPressed(.submit, gamepad),
         .pause_pressed = isActionPressed(.pause, gamepad),
         .restart_pressed = isActionPressed(.restart, gamepad),
@@ -141,6 +150,7 @@ pub fn poll() FrameInput {
         if (touch.isLeftDown()) input.move_x -= 1.0;
         if (touch.isRightDown()) input.move_x += 1.0;
         input.move_x = std.math.clamp(input.move_x, -1.0, 1.0);
+        if (touch.isRunDown()) input.run_down = true;
         if (touch.isJumpDown()) input.jump_down = true;
         if (touch.isJumpPressed()) {
             input.jump_pressed = true;
@@ -163,6 +173,7 @@ pub fn getConnectedGamepadName() ?[:0]const u8 {
 pub fn getActionPrompt(action: Action, has_gamepad: bool) [:0]const u8 {
     return switch (action) {
         .jump => if (has_gamepad) "Space, W, Up, or A / Cross" else "Space, W, or Up",
+        .run => if (has_gamepad) "Shift or X / Square" else "Shift",
         .submit => if (has_gamepad) "Enter, E, or X / Square" else "Enter or E",
         .pause => if (has_gamepad) "P, ESC, or Start" else "P or ESC",
         .restart => if (has_gamepad) "R or X / Square" else "R",
@@ -244,6 +255,7 @@ fn getBinding(action: Action) ButtonBinding {
         .move_left => .{ .keys = move_left_keys[0..], .buttons = move_left_buttons[0..] },
         .move_right => .{ .keys = move_right_keys[0..], .buttons = move_right_buttons[0..] },
         .jump => .{ .keys = jump_keys[0..], .buttons = jump_buttons[0..] },
+        .run => .{ .keys = run_keys[0..], .buttons = run_buttons[0..] },
         .submit => .{ .keys = submit_keys[0..], .buttons = submit_buttons[0..] },
         .pause => .{ .keys = pause_keys[0..], .buttons = pause_buttons[0..] },
         .restart => .{ .keys = restart_keys[0..], .buttons = restart_buttons[0..] },
@@ -300,7 +312,7 @@ fn isRawActionDown(action: Action) bool {
 fn getRawButton(action: Action) ?usize {
     return switch (action) {
         .jump => RAW_A,
-        .submit, .restart => RAW_X,
+        .run, .submit, .restart => RAW_X,
         .pause => RAW_START,
         .move_left, .move_right => null,
     };
@@ -393,6 +405,11 @@ test "submit prompt includes controller guidance when available" {
 
 test "pause prompt stays keyboard friendly without controller" {
     try std.testing.expectEqualStrings("P or ESC", getActionPrompt(.pause, false));
+}
+
+test "run prompt names the shared left face button on a controller" {
+    try std.testing.expectEqualStrings("Shift", getActionPrompt(.run, false));
+    try std.testing.expectEqualStrings("Shift or X / Square", getActionPrompt(.run, true));
 }
 
 /// True if any keyboard key or gamepad button was pressed this frame.

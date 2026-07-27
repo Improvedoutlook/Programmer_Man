@@ -255,8 +255,10 @@ So `web.ps1` turns the dial down to `-O1` (via `-Dweb-fast=true`):
 | default (`-O1`) | 2.5s | ~8.5s | ~2.4s | 711 KB |
 | `-Optimized` (`-O3`) | 13.0s | ~19s | ~16s | 287 KB |
 
-The bigger `-O1` file sounds bad but is ~1.5% of page weight — `index.data` is
-30 MB of music and sprites, which dwarfs it.
+The bigger `-O1` file seems worse than it is. The penalty is the *difference*
+between the two rows — about 424 KB gzipped — against an `index.data` of 24.9 MB
+(96% of it music, and MP3 does not gzip any further). So choosing `-O1` locally
+adds roughly **1.7%** to what a visitor downloads, to save 10.5s per build.
 
 **The live site is always `-O3`.** `-Dweb-fast` defaults to `false` in
 `build.zig`, and `.github/workflows/deploy-pages.yml` never passes it, so the

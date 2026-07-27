@@ -5,10 +5,17 @@ name: Deploy web build to GitHub Pages
 # Game ends up live at https://improvedoutlook.github.io/Programmer_Man/
 #
 # One-time setup in the repo: Settings -> Pages -> Source: "GitHub Actions".
+#
+# Deploys are driven from develop-main only. This file is deliberately kept on
+# main (the default branch) even though main never triggers it: GitHub only
+# offers the manual "Run workflow" button for workflows that exist on the
+# default branch, so deleting it here would remove manual redeploys repo-wide.
+# This trigger list is the ONLY intended difference between main and
+# develop-main -- keep the rest of the file in sync.
 
 on:
   push:
-    branches: [develop-main, main]
+    branches: [develop-main]
   workflow_dispatch:
 
 # Permissions the deploy-pages action needs.

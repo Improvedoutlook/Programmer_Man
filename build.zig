@@ -115,7 +115,8 @@ pub fn build(b: *std.Build) void {
         // Custom presentation shell (Phase 5): centered responsive canvas, a
         // loading/progress bar wired to Module.setStatus/monitorRunDependencies,
         // a click-to-start gesture surface (also unlocks WebAudio, see Phase 4),
-        // and page chrome (title + controls legend). Replaces emcc's bare
+        // and minimal page chrome (title only — the controls reference lives on
+        // the in-game pause screen, not around the canvas). Replaces emcc's bare
         // default index.html. emcc substitutes {{{ SCRIPT }}} with its loader.
         link.addArg("--shell-file");
         link.addArg(b.pathFromRoot("web/shell.html"));

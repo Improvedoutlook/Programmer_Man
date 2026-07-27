@@ -200,6 +200,9 @@ pub const Game = struct {
     /// Seconds of screen shake remaining. Set by a power stomp; counts down each
     /// frame and jitters the camera in render() while positive.
     shake_timer: f32,
+    /// Scroll offset (pixels) of the pause screen's controls list. Reset every
+    /// time the game is paused so the list always opens at the top.
+    pause_scroll: f32,
 
     const Self = @This();
     const MAX_LEVELS: u8 = 4; // Total number of levels (Level 1 = index 0, ..., Level 4 = index 3)
@@ -247,6 +250,7 @@ pub const Game = struct {
             // for the first user gesture before starting any track.
             .audio_armed = builtin.target.os.tag != .emscripten,
             .shake_timer = 0,
+            .pause_scroll = 0,
         };
 
         // Only start the opening track now if audio is already armed (native).
@@ -586,7 +590,7 @@ pub const Game = struct {
         switch (self.state) {
             .opening => self.updateOpening(input),
             .playing => self.updatePlaying(dt, input),
-            .paused => self.updatePaused(input),
+            .paused => self.updatePaused(dt, input),
             .game_over => self.updateGameOver(input),
             .victory => self.updateVictory(input),
             .credits => self.updateCredits(dt, input),
@@ -633,6 +637,7 @@ pub const Game = struct {
         // Check for pause
         if (input.pause_pressed) {
             self.state = .paused;
+            self.pause_scroll = 0; // controls list always opens at the top
             return;
         }
 
@@ -732,12 +737,22 @@ pub const Game = struct {
         }
     }
 
-    fn updatePaused(self: *Self, input: controls.FrameInput) void {
-        // A fresh touch anywhere resumes (the pause button maps to pause_pressed;
-        // tapping elsewhere on the dimmed screen works too).
-        if (input.pause_pressed or touch.anyTapPressed()) {
+    fn updatePaused(self: *Self, dt: f32, input: controls.FrameInput) void {
+        // Resume: the pause key/button again, or (on touch) the pause button in
+        // the corner or the RESUME pill — both report as pause_pressed. A tap
+        // anywhere else on the menu scrolls the controls list instead, so a
+        // swipe over the list can't dump the player back into play.
+        if (input.pause_pressed) {
             self.state = .playing;
+            return;
         }
+
+        // Scroll the controls list (keys, wheel, stick, or a finger drag).
+        self.pause_scroll = std.math.clamp(
+            self.pause_scroll + controls.menuScrollDelta(dt),
+            0,
+            pauseMaxScroll(),
+        );
     }
 
     fn updateGameOver(self: *Self, input: controls.FrameInput) void {
@@ -921,10 +936,15 @@ pub const Game = struct {
         self.camera.rl_camera.offset = base_offset;
 
         // === Screen-space rendering (HUD & overlays — not affected by camera) ===
-        self.player.renderHUD(self.has_gamepad, self.gamepad_name);
+        // The pause screen is a full-screen menu and reuses the same corners as
+        // the HUD, so the HUD steps aside for it rather than showing through the
+        // dim behind the controls list.
+        if (self.state != .paused) {
+            self.player.renderHUD(self.has_gamepad, self.gamepad_name);
 
-        // Two-task status line under the HUD (bugs remaining + system state).
-        self.renderTaskStatus();
+            // Two-task status line under the HUD (bugs remaining + system state).
+            self.renderTaskStatus();
+        }
 
         // Adaptive objective hint — always points at whatever task is left.
         if (self.state == .playing) {
@@ -949,24 +969,115 @@ pub const Game = struct {
         touch.render(self.state);
     }
 
-    fn renderPausedOverlay(self: *Self) void {
-        // Semi-transparent overlay
-        var overlay_color = rl.Color.white;
-        overlay_color.a = 150;
-        rl.drawRectangle(0, 0, config.SCREEN_WIDTH, config.SCREEN_HEIGHT, overlay_color);
-        overlay_color.r = 0;
-        overlay_color.g = 0;
-        overlay_color.b = 0;
-        rl.drawRectangle(0, 0, config.SCREEN_WIDTH, config.SCREEN_HEIGHT, overlay_color);
+    // --- Pause screen layout (all in the 800x600 framebuffer) ---------------
+    // The pause screen is the game's controls menu: nothing advertises the
+    // bindings during play, and the web page around the canvas carries no
+    // legend, so everything the player needs to look up lives in the scrolling
+    // list below. The rows themselves come from controls.reference_entries.
+    const PAUSE_VIEW_TOP: i32 = 138;
+    /// Bottom of the scroll viewport. The strip below it stays clear for the
+    /// touch RESUME button (touch.resume_rect).
+    const PAUSE_VIEW_BOTTOM: i32 = 526;
+    const PAUSE_MARGIN: i32 = 84; // left edge of the list / action column
+    const PAUSE_COL_KEY: i32 = 236;
+    const PAUSE_COL_PAD: i32 = 520;
+    const PAUSE_ROW_H: i32 = 27;
+    const PAUSE_NOTE_H: i32 = 22;
+    const PAUSE_SECTION_H: i32 = 40;
+    const PAUSE_COLUMNS_H: i32 = 26;
+    const PAUSE_ROW_SIZE: i32 = 18;
+    const PAUSE_SMALL_SIZE: i32 = 16;
 
-        // Pause text
-        rl.drawText("PAUSED", config.SCREEN_WIDTH / 2 - 80, config.SCREEN_HEIGHT / 2 - 30, 40, config.HUD_COLOR);
-        var continue_buf: [96]u8 = undefined;
-        const continue_prompt = controls.getActionPrompt(.pause, self.has_gamepad);
-        const continue_text = std.fmt.bufPrintZ(&continue_buf, "Press {s} to continue", .{continue_prompt}) catch "Press P or ESC to continue";
-        const continue_text_width = rl.measureText(continue_text, 20);
-        const continue_x: i32 = @divTrunc(config.SCREEN_WIDTH - continue_text_width, 2);
-        rl.drawText(continue_text, continue_x, config.SCREEN_HEIGHT / 2 + 20, 20, config.HUD_COLOR);
+    fn pauseEntryHeight(entry: controls.ReferenceEntry) i32 {
+        return switch (entry) {
+            .row => PAUSE_ROW_H,
+            .note => PAUSE_NOTE_H,
+            .section => PAUSE_SECTION_H,
+            .columns => PAUSE_COLUMNS_H,
+            .gap => |px| px,
+        };
+    }
+
+    fn pauseContentHeight() i32 {
+        var content: i32 = 0;
+        for (controls.reference_entries) |entry| content += pauseEntryHeight(entry);
+        return content;
+    }
+
+    /// How far the controls list can scroll before its last line is on screen.
+    /// 0 when the whole list already fits (desktop, where there are no touch or
+    /// browser sections), which also hides the scroll affordances.
+    fn pauseMaxScroll() f32 {
+        const overflow = pauseContentHeight() - (PAUSE_VIEW_BOTTOM - PAUSE_VIEW_TOP);
+        return if (overflow > 0) @floatFromInt(overflow) else 0;
+    }
+
+    fn renderPausedOverlay(self: *Self) void {
+        // Dim the frozen world so the menu text reads clearly over it.
+        rl.drawRectangle(0, 0, config.SCREEN_WIDTH, config.SCREEN_HEIGHT, .{ .r = 0, .g = 0, .b = 0, .a = 210 });
+
+        const dim = rl.Color{ .r = 110, .g = 150, .b = 130, .a = 255 };
+
+        const title_w = rl.measureText("PAUSED", 40);
+        rl.drawText("PAUSED", @divTrunc(config.SCREEN_WIDTH - title_w, 2), 24, 40, config.HUD_COLOR);
+
+        var resume_buf: [96]u8 = undefined;
+        const resume_prompt = controls.getActionPrompt(.pause, self.has_gamepad);
+        const resume_text = std.fmt.bufPrintZ(&resume_buf, "Press {s} to resume", .{resume_prompt}) catch "Press P or ESC to resume";
+        const resume_w = rl.measureText(resume_text, 20);
+        rl.drawText(resume_text, @divTrunc(config.SCREEN_WIDTH - resume_w, 2), 72, 20, config.HUD_COLOR);
+
+        rl.drawText("CONTROLS", PAUSE_MARGIN, 104, 24, config.HUD_COLOR);
+        rl.drawLine(PAUSE_MARGIN, 132, config.SCREEN_WIDTH - PAUSE_MARGIN, 132, dim);
+
+        const max_scroll = pauseMaxScroll();
+        if (max_scroll > 0) {
+            const hint = "scroll: Up / Down, wheel, stick, or swipe";
+            const hint_w = rl.measureText(hint, PAUSE_SMALL_SIZE);
+            rl.drawText(hint, config.SCREEN_WIDTH - PAUSE_MARGIN - hint_w, 112, PAUSE_SMALL_SIZE, dim);
+        }
+
+        // The list itself, clipped to its viewport so scrolled-off rows don't
+        // bleed into the title or the RESUME button.
+        rl.beginScissorMode(0, PAUSE_VIEW_TOP, config.SCREEN_WIDTH, PAUSE_VIEW_BOTTOM - PAUSE_VIEW_TOP);
+        var y: i32 = PAUSE_VIEW_TOP - @as(i32, @intFromFloat(self.pause_scroll));
+        for (controls.reference_entries) |entry| {
+            switch (entry) {
+                .columns => {
+                    rl.drawText("KEYBOARD", PAUSE_COL_KEY, y, PAUSE_SMALL_SIZE, dim);
+                    rl.drawText("CONTROLLER", PAUSE_COL_PAD, y, PAUSE_SMALL_SIZE, dim);
+                },
+                .section => |label| rl.drawText(label, PAUSE_MARGIN, y + 12, 20, config.HUD_COLOR),
+                .row => |row| {
+                    rl.drawText(row.label, PAUSE_MARGIN, y, PAUSE_ROW_SIZE, config.HUD_COLOR);
+                    rl.drawText(row.keyboard, PAUSE_COL_KEY, y, PAUSE_ROW_SIZE, rl.Color.white);
+                    if (row.pad.len > 0) {
+                        rl.drawText(row.pad, PAUSE_COL_PAD, y, PAUSE_ROW_SIZE, rl.Color.white);
+                    }
+                },
+                .note => |note| rl.drawText(note, PAUSE_MARGIN, y, PAUSE_SMALL_SIZE, dim),
+                .gap => {},
+            }
+            y += pauseEntryHeight(entry);
+        }
+        rl.endScissorMode();
+
+        // Scrollbar down the right edge — how much list there is and where you
+        // are in it. Sits outside the text columns, so it can't collide with a
+        // row the way an arrow between the rule and the first row would.
+        if (max_scroll > 0) {
+            const view_h: i32 = PAUSE_VIEW_BOTTOM - PAUSE_VIEW_TOP;
+            const track_x: i32 = config.SCREEN_WIDTH - PAUSE_MARGIN + 12;
+            var track_dim = dim;
+            track_dim.a = 90;
+            rl.drawRectangle(track_x, PAUSE_VIEW_TOP, 5, view_h, track_dim);
+
+            const view_f: f32 = @floatFromInt(view_h);
+            const thumb_h: f32 = @max(28, view_f * view_f / @as(f32, @floatFromInt(pauseContentHeight())));
+            const thumb_y: f32 = @as(f32, @floatFromInt(PAUSE_VIEW_TOP)) +
+                (view_f - thumb_h) * (self.pause_scroll / max_scroll);
+            rl.drawRectangle(track_x, @intFromFloat(thumb_y), 5, @intFromFloat(thumb_h), config.HUD_COLOR);
+        }
     }
 
     fn renderVictoryOverlay(self: *Self) void {
@@ -1236,3 +1347,23 @@ pub const Game = struct {
         rl.drawText(hint, hint_x, hint_y, 18, config.HUD_COLOR);
     }
 };
+
+test "pause list scrolls to exactly its last line, never past it" {
+    const view_h = Game.PAUSE_VIEW_BOTTOM - Game.PAUSE_VIEW_TOP;
+    try std.testing.expect(view_h > 0);
+    try std.testing.expect(Game.pauseContentHeight() > 0);
+
+    const max_scroll = Game.pauseMaxScroll();
+    try std.testing.expect(max_scroll >= 0);
+
+    if (Game.pauseContentHeight() > view_h) {
+        // Scrolled all the way down, the last line sits on the bottom edge.
+        try std.testing.expectEqual(
+            Game.pauseContentHeight() - view_h,
+            @as(i32, @intFromFloat(max_scroll)),
+        );
+    } else {
+        // Whole list already visible — no scrolling, no scrollbar.
+        try std.testing.expectEqual(@as(f32, 0), max_scroll);
+    }
+}

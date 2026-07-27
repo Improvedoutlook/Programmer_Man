@@ -90,7 +90,10 @@
          dvh/dvw track the live viewport as mobile browser chrome shows/hides. */
       #stage {
         position: relative;
-        width: min(90vw, calc(80dvh * 800 / 600), 800px);
+        /* 85dvh (was 80) — with the controls legend and its notes moved into the
+           in-game pause screen, the only page chrome left above the stage is the
+           title, so the game can claim the height they used to eat. */
+        width: min(90vw, calc(85dvh * 800 / 600), 800px);
         aspect-ratio: 800 / 600;
         background: #000;
         border: 1px solid #1e2740;
@@ -212,7 +215,8 @@
       body.is-pseudo-fullscreen { overflow: hidden; }
 
       /* Compact / full-bleed layout for touch devices and small viewports.
-         Drops the surrounding page chrome (title, legend, notes) that would
+         Drops the surrounding page chrome (the title — the controls legend is
+         gone entirely, it now lives on the in-game pause screen) that would
          otherwise crowd the canvas off-screen — especially in landscape, where
          vertical space is scarce — and lets the #stage fill the whole viewport
          in EITHER orientation. The stage keeps its 4:3 aspect and centers, so
@@ -227,7 +231,7 @@
           background: #000;
           min-height: 100dvh;
         }
-        h1, #legend, .note { display: none; }
+        h1 { display: none; }
         #stage {
           width: min(var(--safe-w), calc(var(--safe-h) * 800 / 600));
           max-width: none;
@@ -249,7 +253,7 @@
           background: #000;
           min-height: 100dvh;
         }
-        h1, #legend, .note { display: none; }
+        h1 { display: none; }
         #stage {
           width: min(var(--safe-w), calc(var(--safe-h) * 800 / 600));
           max-width: none;
@@ -337,22 +341,6 @@
       }
       #fs-toast.show { opacity: 1; }
 
-      #legend {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px 18px;
-        justify-content: center;
-        color: var(--muted);
-        font-size: 0.85rem;
-      }
-      #legend b { color: var(--text); font-weight: 600; }
-      .note {
-        margin: 0;
-        color: var(--muted);
-        font-size: 0.8rem;
-        text-align: center;
-        max-width: 520px;
-      }
       a { color: var(--accent); }
     </style>
   </head>
@@ -384,15 +372,12 @@
       <div id="fs-toast" role="status" aria-live="polite"></div>
     </div>
 
-    <div id="legend">
-      <span><b>Move</b> A / D · ← / → · d-pad / stick</span>
-      <span><b>Jump</b> Space · W · ↑ · A / Cross</span>
-      <span><b>Confirm</b> Enter · E · X / Square</span>
-      <span><b>Pause</b> Esc · P · Start</span>
-      <span><b>Fullscreen</b> F · ⛶</span>
-    </div>
-    <p class="note">🎮 Gamepad supported — press any button (you may need to press one first so your browser detects it).</p>
-    <p class="note">📱 Touch supported — on-screen controls appear automatically on tablets &amp; phones.</p>
+    <!-- No controls legend here on purpose: the page furniture was competing
+         with the game for screen space (worst on phones, where it wrapped into
+         several lines and squeezed the canvas). The full reference — keyboard,
+         controller, touch, and fullscreen — now lives on the in-game pause
+         screen instead, as a scrollable CONTROLS list (game.renderPausedOverlay,
+         rows from controls.reference_entries). -->
 
     <script>
       (function () {

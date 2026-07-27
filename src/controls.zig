@@ -181,6 +181,95 @@ pub fn getActionPrompt(action: Action, has_gamepad: bool) [:0]const u8 {
     };
 }
 
+// ---------------------------------------------------------------------------
+// Controls reference (the pause screen's scrollable list)
+// ---------------------------------------------------------------------------
+
+/// One line of the controls reference shown on the pause screen. This is the
+/// ONLY place the game advertises its bindings — nothing is drawn during play
+/// and the web page carries no legend — so it lives next to the bindings above
+/// to keep the two from drifting apart. game.zig owns the pixel layout.
+pub const ReferenceEntry = union(enum) {
+    /// Heading introducing the rows that follow.
+    section: [:0]const u8,
+    /// The "KEYBOARD / CONTROLLER" column titles.
+    columns: void,
+    /// One action; `pad` is empty for rows with no controller equivalent.
+    row: struct {
+        label: [:0]const u8,
+        keyboard: [:0]const u8,
+        pad: [:0]const u8,
+    },
+    /// A dim line of prose.
+    note: [:0]const u8,
+    /// Vertical spacer, in framebuffer pixels.
+    gap: i32,
+};
+
+const shared_reference = [_]ReferenceEntry{
+    .{ .columns = {} },
+    .{ .row = .{ .label = "Move", .keyboard = "A / D  or  Left / Right", .pad = "D-pad or left stick" } },
+    .{ .row = .{ .label = "Jump", .keyboard = "Space / W / Up", .pad = "A / Cross" } },
+    .{ .row = .{ .label = "Run", .keyboard = "hold Shift", .pad = "hold X / Square" } },
+    .{ .row = .{ .label = "Confirm", .keyboard = "Enter / E", .pad = "X / Square" } },
+    .{ .row = .{ .label = "Pause", .keyboard = "Esc / P", .pad = "Start" } },
+    .{ .row = .{ .label = "Restart", .keyboard = "R", .pad = "X / Square" } },
+    .{ .gap = 8 },
+    .{ .note = "Hold the run key with a direction to sprint." },
+    .{ .note = "Confirm opens the Server Room door and submits the PR at the terminal." },
+};
+
+const web_reference = [_]ReferenceEntry{
+    .{ .gap = 12 },
+    .{ .section = "TOUCH" },
+    .{ .row = .{ .label = "Jump", .keyboard = "tap anywhere", .pad = "" } },
+    .{ .row = .{ .label = "Move", .keyboard = "hold and swipe left or right", .pad = "" } },
+    .{ .row = .{ .label = "Run", .keyboard = "swipe further out", .pad = "" } },
+    .{ .row = .{ .label = "Pause", .keyboard = "tap the top-right button", .pad = "" } },
+    .{ .gap = 12 },
+    .{ .section = "BROWSER" },
+    .{ .row = .{ .label = "Fullscreen", .keyboard = "F  or  the corner button", .pad = "" } },
+    .{ .gap = 8 },
+    .{ .note = "No controller listed? Press one of its buttons first - a browser only" },
+    .{ .note = "reports a gamepad after it has sent some input." },
+};
+
+/// The full reference list. The web build documents touch and the browser's
+/// fullscreen key as well; neither exists on desktop.
+pub const reference_entries = shared_reference ++ (if (is_web) web_reference else [_]ReferenceEntry{});
+
+/// Pixels the pause screen's controls list should scroll this frame (positive
+/// scrolls further down the list). Deliberately separate from the gameplay
+/// bindings: menu navigation uses Up/Down, the wheel, the stick, or a finger
+/// drag, so scrolling a menu can never double as a jump.
+pub fn menuScrollDelta(dt: f32) f32 {
+    const key_rate: f32 = 520; // pixels per second while held
+    var delta: f32 = 0;
+
+    if (rl.isKeyDown(.down)) delta += key_rate * dt;
+    if (rl.isKeyDown(.up)) delta -= key_rate * dt;
+    if (rl.isKeyPressed(.page_down)) delta += 200;
+    if (rl.isKeyPressed(.page_up)) delta -= 200;
+
+    // Wheel up (positive) walks back up the list.
+    delta -= rl.getMouseWheelMove() * 44;
+
+    // Reuse the gamepad poll() already resolved this frame rather than
+    // re-scanning (getActiveGamepad has connect-grace side effects).
+    if (last_gamepad_state and last_gamepad_index >= 0 and gamepad_connect_grace == 0) {
+        var axis = rl.getGamepadAxisMovement(last_gamepad_index, .left_y);
+        if (@abs(axis) < config.GAMEPAD_AXIS_DEADZONE) axis = 0;
+        delta += axis * key_rate * dt;
+        if (rl.isGamepadButtonDown(last_gamepad_index, .left_face_down)) delta += key_rate * dt;
+        if (rl.isGamepadButtonDown(last_gamepad_index, .left_face_up)) delta -= key_rate * dt;
+    }
+
+    // Dragging a finger up the screen pulls the list up (native: always 0).
+    delta -= touch.dragDeltaY();
+
+    return delta;
+}
+
 fn readMoveAxis(gamepad: ?GamepadInfo) f32 {
     var move_input: f32 = 0.0;
 
@@ -405,6 +494,42 @@ test "submit prompt includes controller guidance when available" {
 
 test "pause prompt stays keyboard friendly without controller" {
     try std.testing.expectEqualStrings("P or ESC", getActionPrompt(.pause, false));
+}
+
+test "controls reference documents every gameplay action, with no blank cells" {
+    var seen_move = false;
+    var seen_jump = false;
+    var seen_run = false;
+    var seen_confirm = false;
+    var seen_pause = false;
+    var seen_restart = false;
+
+    for (reference_entries) |entry| {
+        switch (entry) {
+            .row => |row| {
+                // A blank label or keyboard cell would draw as a hole in the table.
+                try std.testing.expect(row.label.len > 0);
+                try std.testing.expect(row.keyboard.len > 0);
+                if (std.mem.eql(u8, row.label, "Move")) seen_move = true;
+                if (std.mem.eql(u8, row.label, "Jump")) seen_jump = true;
+                if (std.mem.eql(u8, row.label, "Run")) seen_run = true;
+                if (std.mem.eql(u8, row.label, "Confirm")) seen_confirm = true;
+                if (std.mem.eql(u8, row.label, "Pause")) seen_pause = true;
+                if (std.mem.eql(u8, row.label, "Restart")) seen_restart = true;
+            },
+            .section => |label| try std.testing.expect(label.len > 0),
+            .note => |note| try std.testing.expect(note.len > 0),
+            .gap => |px| try std.testing.expect(px > 0),
+            .columns => {},
+        }
+    }
+
+    try std.testing.expect(seen_move);
+    try std.testing.expect(seen_jump);
+    try std.testing.expect(seen_run);
+    try std.testing.expect(seen_confirm);
+    try std.testing.expect(seen_pause);
+    try std.testing.expect(seen_restart);
 }
 
 test "run prompt names the shared left face button on a controller" {

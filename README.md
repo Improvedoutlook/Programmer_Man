@@ -32,13 +32,19 @@ Programmer_Man is a retro-style platformer where you play as a programmer naviga
 
 | Action | Keyboard | Gamepad | Touch (tablet/phone) |
 |--------|----------|---------|----------------------|
-| Move Left | `A` or `←` (Left Arrow) | D-pad / left stick | ◀ button (bottom-left) |
-| Move Right | `D` or `→` (Right Arrow) | D-pad / left stick | ▶ button (bottom-left) |
-| Jump | `Space`, `W`, or `↑` (Up Arrow) | `A` / Cross | JUMP button (bottom-right) |
+| Move Left | `A` or `←` (Left Arrow) | D-pad / left stick | Hold and swipe left |
+| Move Right | `D` or `→` (Right Arrow) | D-pad / left stick | Hold and swipe right |
+| Jump | `Space`, `W`, or `↑` (Up Arrow) | `A` / Cross | Tap anywhere |
 | Run | Hold `Shift` + a direction | Hold `X` / Square + a direction | Swipe further out from where your thumb landed |
 | Confirm / Submit PR | `Enter` or `E` | `X` / Square | Jump onto the terminal, or tap |
 | Pause | `P` or `Escape` | Start | ❚❚ button (top-right) |
 | Restart (after game over) | `R` | `X` / Square | Tap anywhere / RESTART button |
+
+This table also lives **in the game**: press pause (`P` / `Escape` / Start, or the
+❚❚ button on touch) and the pause screen shows a scrollable **CONTROLS** list,
+built from `controls.reference_entries`. That is the only place the bindings are
+shown — nothing is drawn during play and the web page around the canvas carries no
+legend, so the controls never cover the game.
 
 **Running.** Holding the run modifier with a direction moves Programmer_Man at
 1.65x his walking pace, switches him to a full-stride sprint animation, and — if
@@ -49,8 +55,10 @@ is tuned around the walk, so running only ever opens up new options; it never
 takes any away.
 
 Gamepads work natively **and** in the browser (Web Gamepad API). On a touch
-device the on-screen controls appear automatically the first time you touch the
-screen — on menus, a tap anywhere confirms/continues.
+device the pause button appears automatically the first time you touch the
+screen — on menus, a tap anywhere confirms/continues. On the pause screen a
+vertical drag scrolls the controls list, and resuming takes the ❚❚ button or the
+RESUME pill, so scrolling can't drop you back into play by accident.
 
 ## Play in the Browser
 
@@ -69,10 +77,12 @@ table above).
 browser only exposes a gamepad to the page after the first press) — then it drives
 the game exactly like the desktop build.
 
-**Touch / tablets.** On an iPad, phone, or any touchscreen, on-screen controls
-(◀ ▶, JUMP, pause) appear automatically the first time you touch the screen.
-Multitouch is supported, so you can hold a direction and tap jump at the same time.
-On menus, a tap anywhere confirms/continues.
+**Touch / tablets.** On an iPad, phone, or any touchscreen the whole play area is
+the controller: tap anywhere to jump, hold and swipe left/right to move, swipe
+further out to run. Multitouch is supported, so you can hold a direction and tap
+jump at the same time. A small ❚❚ button sits top-right; tapping it opens the
+pause screen, where the full controls list is a swipe away. On menus, a tap
+anywhere confirms/continues.
 
 > The page must be served over HTTP(S). Opening the files directly with a
 > `file://` URL will **not** work — the browser has to `fetch()` the `.wasm` and
@@ -188,8 +198,9 @@ This is an **additive** target — the native desktop build above is unchanged. 
 > post-loop cleanup is documented as not running under `-sASYNCIFY`. Phase 4
 > gates audio start behind the first input gesture (browser autoplay policy).
 > Phase 5 adds a custom presentation shell (`web/shell.html`) with a loading bar,
-> click-to-start gesture, and controls legend, plus the deploy layout below. The
-> native desktop build is unchanged.
+> click-to-start gesture, and the deploy layout below (no controls legend — the
+> reference lives on the in-game pause screen so page furniture never crowds the
+> canvas). The native desktop build is unchanged.
 >
 > **Browser input:** gamepads work in the browser via the Web Gamepad API (the
 > desktop-only raw GLFW joystick fallback is compiled out on the web target, which
@@ -283,8 +294,11 @@ emcc's bare default: a centered, aspect-ratio-locked `<canvas>` that CSS scales
 from the game's fixed 800×600 framebuffer (crisp nearest-neighbor filtering), a
 loading/progress bar driven by Emscripten's `Module.setStatus` /
 `monitorRunDependencies`, a **Click to Start** button that gates the start of the
-game, and a controls legend. The button is the real start gate: clicking it both
-supplies the user gesture browsers require to unlock WebAudio (resuming
+game. Deliberately no controls legend: the page chrome used to squeeze the canvas
+(worst on laptop-height windows, where it pushed the game off the bottom of the
+page), so the reference moved to the in-game pause screen. The button is the real
+start gate: clicking it both supplies the user gesture browsers require to unlock
+WebAudio (resuming
 miniaudio's suspended `AudioContext`) and signals the game — via the
 `window.Module.pmStarted` flag, which the wasm side polls — to begin the opening
 track. Any input on the canvas still arms audio too, as a fallback. Edit

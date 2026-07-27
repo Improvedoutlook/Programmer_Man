@@ -23,9 +23,12 @@
 //! player.zig) the held flag is latched on for a short window after the tap.
 //!
 //! A small pause button is kept top-right; a touch that starts on it pauses
-//! rather than moving/jumping. Everything here compiles in only on the web
-//! target: on native `is_web` is comptime-false and every entry point collapses
-//! to a no-op, so desktop is completely untouched.
+//! rather than moving/jumping. While the pause menu is up the gestures change
+//! meaning: the RESUME button (or the pause button again) resumes and a vertical
+//! drag scrolls the controls list, so a stray swipe over the menu can neither
+//! resume nor jump. Everything here compiles in only on the web target: on
+//! native `is_web` is comptime-false and every entry point collapses to a no-op,
+//! so desktop is completely untouched.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -53,8 +56,13 @@ const jump_hold_window: f32 = 0.35; // how long the jump flag stays latched afte
 // fullscreen button (very top-right corner of the canvas).
 const pause_rect = rl.Rectangle{ .x = GW - 64 - 70, .y = 16, .width = 64, .height = 48 };
 
+// RESUME button on the pause menu, in the strip the controls list leaves free
+// at the bottom (see game.zig's PAUSE_VIEW_BOTTOM).
+const resume_rect = rl.Rectangle{ .x = GW / 2 - 90, .y = GH - 62, .width = 180, .height = 46 };
+
 // --- Per-finger tracking ----------------------------------------------------
-const Kind = enum { pending, move, pause };
+// `scroll` and `resume_btn` only occur while the pause menu is up.
+const Kind = enum { pending, move, pause, scroll, resume_btn };
 
 const Tracked = struct {
     id: i32 = -1,
@@ -62,6 +70,7 @@ const Tracked = struct {
     kind: Kind = .pending,
     start: Vec = .{ .x = 0, .y = 0 },
     last: Vec = .{ .x = 0, .y = 0 },
+    prev: Vec = .{ .x = 0, .y = 0 }, // position last frame (drag deltas)
     start_time: f64 = 0,
     dir: i32 = 0, // -1 left, 0 none, +1 right (only meaningful for .move)
     running: bool = false, // swiped past run_threshold (only meaningful for .move)
@@ -79,7 +88,10 @@ var jump_pressed: bool = false; // rising edge: a tap lifted this frame
 var jump_hold_timer: f32 = 0; // > 0 => report jump as held (full-height jumps)
 var pause_pressed: bool = false; // rising edge: a finger landed on the pause button
 var pause_active: bool = false; // a finger is currently on the pause button (for highlight)
+var resume_active: bool = false; // ...likewise for the pause menu's RESUME button
 var fresh_tap: bool = false; // a brand-new finger touched down this frame (menus)
+var drag_dy: f32 = 0; // vertical finger travel this frame (pause-menu scrolling)
+var paused_ui: bool = false; // pause menu on screen (set by render, read next frame)
 
 fn findTracked(id: i32) ?*Tracked {
     for (&tracked) |*t| {
@@ -107,6 +119,7 @@ pub fn update() void {
     jump_pressed = false;
     pause_pressed = false;
     fresh_tap = false;
+    drag_dy = 0;
     if (jump_hold_timer > 0) jump_hold_timer = @max(0, jump_hold_timer - dt);
 
     // Mark every tracked finger unseen; we re-confirm the ones still down.
@@ -122,12 +135,14 @@ pub fn update() void {
         const p = rl.getTouchPosition(idx);
 
         if (findTracked(id)) |t| {
+            t.prev = t.last;
             t.last = p;
             for (&tracked, 0..) |*tt, k| {
                 if (tt == t) seen_this_frame[k] = true;
             }
         } else {
-            // New finger down.
+            // New finger down. While the pause menu is up a finger is either a
+            // button press or a scroll drag — never a move or a jump.
             fresh_tap = true;
             const slot = freeSlot() orelse continue;
             slot.* = .{
@@ -135,14 +150,22 @@ pub fn update() void {
                 .active = true,
                 .start = p,
                 .last = p,
+                .prev = p,
                 .start_time = now,
-                .kind = if (rl.checkCollisionPointRec(p, pause_rect)) .pause else .pending,
+                .kind = if (rl.checkCollisionPointRec(p, pause_rect))
+                    .pause
+                else if (!paused_ui)
+                    .pending
+                else if (rl.checkCollisionPointRec(p, resume_rect))
+                    .resume_btn
+                else
+                    .scroll,
             };
             for (&tracked, 0..) |*tt, k| {
                 if (tt == slot) seen_this_frame[k] = true;
             }
-            if (slot.kind == .pause) {
-                pause_pressed = true; // fire pause immediately on press
+            if (slot.kind == .pause or slot.kind == .resume_btn) {
+                pause_pressed = true; // fire pause/resume immediately on press
             }
         }
     }
@@ -154,6 +177,7 @@ pub fn update() void {
     right_held = false;
     run_held = false;
     pause_active = false;
+    resume_active = false;
 
     for (&tracked, 0..) |*t, k| {
         if (!t.active) continue;
@@ -193,7 +217,9 @@ pub fn update() void {
             if (t.dir > 0) right_held = true;
             if (t.dir != 0 and t.running) run_held = true;
         }
+        if (t.kind == .scroll) drag_dy += t.last.y - t.prev.y;
         if (t.kind == .pause) pause_active = true;
+        if (t.kind == .resume_btn) resume_active = true;
     }
 }
 
@@ -222,6 +248,13 @@ pub fn isPausePressed() bool {
     return is_web and pause_pressed;
 }
 
+/// Pixels a finger dragged vertically this frame while the pause menu is up
+/// (positive = downward). Feeds controls.menuScrollDelta; always 0 elsewhere.
+pub fn dragDeltaY() f32 {
+    if (!is_web) return 0;
+    return drag_dy;
+}
+
 /// True on the frame a new finger touches down anywhere. Menu screens
 /// (opening / paused / game over / victory / credits) treat this as
 /// "confirm / continue" so the whole screen is one big button.
@@ -243,7 +276,13 @@ const GameState = @import("game.zig").GameState;
 /// Draw the (minimal) touch UI for the current screen. No-op on native, and on
 /// web until the first touch is detected.
 pub fn render(state: GameState) void {
-    if (!is_web or !seen_touch) return;
+    if (!is_web) return;
+
+    // Latch the pause-menu gesture mode for next frame's update(): a finger on
+    // the menu scrolls or presses RESUME instead of moving/jumping.
+    paused_ui = state == .paused;
+
+    if (!seen_touch) return;
 
     switch (state) {
         .playing => {
@@ -252,7 +291,7 @@ pub fn render(state: GameState) void {
         },
         .paused => {
             drawPauseButton(true);
-            drawCenterButton("TAP TO RESUME");
+            drawButton(resume_rect, "RESUME", resume_active);
         },
         .game_over => drawCenterButton("RESTART"),
         .victory => drawCenterButton("TAP TO CONTINUE"),
@@ -296,24 +335,31 @@ fn drawPauseButton(is_paused: bool) void {
 }
 
 /// A wide pill near the bottom of the screen used as the touch affordance on
-/// menu screens. The whole screen already accepts a tap (anyTapPressed), so
-/// this is purely a visual cue showing where to press.
+/// menu screens that accept a tap anywhere (anyTapPressed), so it is purely a
+/// visual cue showing where to press.
 fn drawCenterButton(label: [:0]const u8) void {
     const fs = 28;
     const w: f32 = @floatFromInt(rl.measureText(label, fs));
     const pad: f32 = 28;
-    const rect = rl.Rectangle{
+    drawButton(.{
         .x = GW / 2 - (w / 2 + pad),
         .y = GH - 110,
         .width = w + pad * 2,
         .height = 56,
-    };
-    rl.drawRectangleRounded(rect, 0.5, 8, rl.Color{ .r = accent.r, .g = accent.g, .b = accent.b, .a = 70 });
+    }, label, false);
+}
+
+/// A pill with its label centred inside the given rect. Unlike drawCenterButton
+/// the rect is fixed, so update() can hit-test it (the pause menu's RESUME).
+fn drawButton(rect: rl.Rectangle, label: [:0]const u8, held: bool) void {
+    const fs = 28;
+    const w: f32 = @floatFromInt(rl.measureText(label, fs));
+    rl.drawRectangleRounded(rect, 0.5, 8, fillFor(held));
     rl.drawRectangleRoundedLinesEx(rect, 0.5, 8, 2, accent);
     rl.drawText(
         label,
-        @as(i32, @intFromFloat(rect.x + pad)),
-        @as(i32, @intFromFloat(rect.y + 14)),
+        @as(i32, @intFromFloat(rect.x + (rect.width - w) / 2)),
+        @as(i32, @intFromFloat(rect.y + (rect.height - @as(f32, fs)) / 2)),
         fs,
         rl.Color.white,
     );
